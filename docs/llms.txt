@@ -1,0 +1,135 @@
+# DAG Harness - LLM Context Summary
+
+> Self-installing DAG orchestration for Ansible role deployments with Claude Code integration.
+
+## Quick Start
+
+```bash
+cd harness && uv sync && cd ..
+harness bootstrap
+harness bootstrap --check-only
+```
+
+## Primary CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `harness bootstrap` | Interactive setup wizard |
+| `harness box-up-role <role>` | Execute workflow for a role |
+| `harness status [role]` | Show role/deployment status |
+| `harness sync` | Sync roles from filesystem |
+| `harness list-roles` | List available roles |
+| `harness hotl start` | Start autonomous operation |
+
+## Key File Locations
+
+| Path | Purpose |
+|------|---------|
+| `harness/harness/cli.py` | CLI entry point |
+| `harness/harness/dag/langgraph_engine.py` | LangGraph workflow engine |
+| `harness/harness/db/state.py` | SQLite state management |
+| `harness/harness/mcp/server.py` | MCP server for Claude Code |
+| `harness/harness/bootstrap/` | Self-bootstrap system |
+| `.claude/settings.json` | Claude Code configuration |
+| `.claude/hooks/` | Pre/Post tool hooks |
+| `.claude/skills/` | Slash command definitions |
+
+## MCP Tools (Claude Code)
+
+- `get_role_status(role_name)` - Get role status
+- `list_role_statuses(wave?)` - List all statuses
+- `sync_roles_from_filesystem()` - Refresh role data
+- `create_worktree(role_name)` - Create git worktree
+- `run_molecule_tests(role_name)` - Execute molecule tests
+- `run_pytest_tests(role_name)` - Execute pytest tests
+- `create_gitlab_issue(role_name, title, desc)` - Create GitLab issue
+- `create_merge_request(role_name, branch, title, desc)` - Create MR
+- `get_active_regressions()` - Find test regressions
+- `record_metric(name, value)` - Record golden metric
+- `execute_workflow(role_name)` - Run box-up-role workflow
+
+## Slash Commands
+
+| Skill | Description |
+|-------|-------------|
+| `/box-up-role <name>` | Package Ansible role with worktree, tests, MR |
+| `/hotl start` | Start Human Out of The Loop mode |
+| `/observability debug-*` | Debugging and diagnostics |
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `GITLAB_TOKEN` | GitLab API token (required) |
+| `HARNESS_DB_PATH` | SQLite database path |
+| `DISCORD_WEBHOOK_URL` | Discord notifications |
+| `HOTL_EMAIL_TO` | HOTL email notifications |
+
+## Architecture Summary
+
+```
+Claude Code
+├── MCP Server (dag-harness) ─────────┐
+├── Hooks (PreToolUse, PostToolUse)   │
+└── Skills (/box-up-role, /hotl)      │
+                                      ▼
+Harness CLI (Typer) ──► DAG Engine (LangGraph)
+                              │
+                              ▼
+                       StateDB (SQLite)
+```
+
+## Workflow Nodes (box-up-role)
+
+1. `validate_role` - Check role exists
+2. `analyze_deps` - Get dependencies
+3. `check_reverse_deps` - Verify reverse deps boxed
+4. `create_worktree` - Create git worktree
+5. `run_molecule` - Execute molecule tests
+6. `run_pytest` - Execute pytest tests
+7. `validate_deploy` - Syntax check
+8. `create_commit` - Semantic commit
+9. `push_branch` - Push to origin
+10. `create_issue` - Create GitLab issue
+11. `create_mr` - Create merge request
+12. `add_to_merge_train` - Add to train
+13. `report_summary` - Generate summary
+
+## Database Tables
+
+- `roles` - Ansible role metadata
+- `worktrees` - Git worktree tracking
+- `test_runs` - Test history, regression detection
+- `workflow_executions` - Execution history
+- `golden_metrics` - Performance metrics
+
+## Testing
+
+```bash
+cd harness && uv run pytest -v
+```
+
+## Common Tasks
+
+**Add new role:**
+```bash
+harness sync
+harness status <role-name>
+```
+
+**Execute workflow:**
+```bash
+harness box-up-role <role-name>
+harness box-up-role <role-name> --breakpoints run_molecule
+```
+
+**Resume failed workflow:**
+```bash
+harness resume <execution-id>
+```
+
+**Check database:**
+```bash
+harness db stats
+harness check
+```

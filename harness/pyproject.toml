@@ -1,0 +1,84 @@
+[project]
+name = "dag-harness"
+version = "0.2.0"
+description = "Disposable DAG orchestration harness with LangGraph and MCP client integration"
+readme = "../README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Jess Sullivan", email = "jsullivan2@bates.edu"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Systems Administration",
+]
+keywords = ["ansible", "dag", "langgraph", "mcp-client", "orchestration"]
+dependencies = [
+    "langgraph>=0.2.0",
+    "langgraph-checkpoint-sqlite>=1.0.0",
+    "langchain-core>=0.3.0",
+    "fastmcp>=0.1.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "rich>=13.0.0",
+    "typer>=0.12.0",
+    "aiosqlite>=0.20.0",
+    "pyyaml>=6.0.0",
+    "packaging>=23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "hypothesis>=6.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.4.0",
+]
+proxy = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+]
+notifications = [
+    "aiosmtplib>=3.0.0",
+]
+all = [
+    "dag-harness[dev,proxy,notifications]",
+]
+
+[project.scripts]
+harness = "harness.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["harness"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning:pydantic",
+    "ignore::DeprecationWarning:langchain_core",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.coverage.run]
+source = ["harness"]
+omit = ["harness/__pycache__/*", "tests/*"]

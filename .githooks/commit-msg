@@ -1,0 +1,8 @@
+#!/bin/bash
+# Reject commits with Co-Authored-By lines
+
+if grep -qi "co-authored-by" "$1"; then
+    echo "ERROR: Co-Authored-By lines are not allowed in this repository."
+    echo "Please remove the Co-Authored-By line from your commit message."
+    exit 1
+fi

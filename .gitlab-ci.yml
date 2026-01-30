@@ -1,0 +1,98 @@
+# GitLab CI/CD Pipeline for DAG Harness
+
+stages:
+  - test
+  - build
+  - pages
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+  PYTHON_VERSION: "3.12"
+
+# Cache Python dependencies
+.uv-cache: &uv-cache
+  cache:
+    key: "uv-$CI_JOB_NAME"
+    paths:
+      - .cache/uv
+      - harness/.venv
+
+# Test stage - Run pytest with coverage
+test:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  <<: *uv-cache
+  script:
+    - pip install uv
+    - cd harness
+    - uv sync --extra dev
+    - uv run pytest -v --cov=harness --cov-report=xml --cov-report=term-missing
+  coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: harness/coverage.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Lint stage - Check code quality
+lint:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  <<: *uv-cache
+  script:
+    - pip install uv
+    - cd harness
+    - uv sync --extra dev
+    - uv run ruff check harness/ || true
+    - uv run ruff format --check harness/ || true
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Build documentation
+build-docs:
+  stage: build
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install mkdocs mkdocs-material pymdown-extensions
+    - mkdocs build --site-dir public
+  artifacts:
+    paths:
+      - public
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Deploy to GitLab Pages
+pages:
+  stage: pages
+  needs:
+    - build-docs
+  script:
+    - echo "Deploying to GitLab Pages"
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Security scanning
+sast:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install bandit
+    - bandit -r harness/harness -f json -o bandit-report.json || true
+  artifacts:
+    paths:
+      - bandit-report.json
+    expire_in: 1 week
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
