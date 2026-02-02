@@ -45,7 +45,6 @@ nav:
     - llms.txt: llms.txt
     - llms.md: llms.md
   - Troubleshooting: troubleshooting.md
-  - Contributing: ../CONTRIBUTING.md
 
 # Markdown extensions
 markdown_extensions:
