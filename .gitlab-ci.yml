@@ -1,4 +1,5 @@
 # GitLab CI/CD Pipeline for DAG Harness
+# Uses local runners on petting-zoo-mini via lima VM docker
 
 stages:
   - test
@@ -18,11 +19,19 @@ variables:
       - .cache/uv
       - harness/.venv
 
+# Use local docker runners via lima VM
+.local-runner: &local-runner
+  tags:
+    - docker
+    - m1
+    - tinyland
+
 # Test stage - Run pytest with coverage
 test:
   stage: test
   image: python:${PYTHON_VERSION}
   <<: *uv-cache
+  <<: *local-runner
   script:
     - pip install uv
     - cd harness
@@ -44,6 +53,7 @@ lint:
   stage: test
   image: python:${PYTHON_VERSION}
   <<: *uv-cache
+  <<: *local-runner
   script:
     - pip install uv
     - cd harness
@@ -59,6 +69,7 @@ test-pbt:
   stage: test
   image: python:${PYTHON_VERSION}
   <<: *uv-cache
+  <<: *local-runner
   script:
     - pip install uv
     - cd harness
@@ -73,6 +84,7 @@ test-pbt:
 build-docs:
   stage: build
   image: python:${PYTHON_VERSION}
+  <<: *local-runner
   script:
     - pip install mkdocs mkdocs-material pymdown-extensions
     - mkdocs build --site-dir public
@@ -88,6 +100,7 @@ pages:
   stage: pages
   needs:
     - build-docs
+  <<: *local-runner
   script:
     - echo "Deploying to GitLab Pages"
   artifacts:
@@ -100,6 +113,7 @@ pages:
 sast:
   stage: test
   image: python:${PYTHON_VERSION}
+  <<: *local-runner
   script:
     - pip install bandit
     - bandit -r harness/harness -f json -o bandit-report.json || true
