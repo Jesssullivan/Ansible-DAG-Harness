@@ -1,0 +1,66 @@
+{
+  "name": "dag-harness",
+  "description": "DAG orchestration harness for Ansible role management with LangGraph workflow execution and MCP integration",
+  "version": "0.2.0",
+  "capabilities": [
+    "invoke",
+    "handoff",
+    "discovery",
+    "ansible_roles",
+    "dependency_analysis",
+    "workflow_execution",
+    "testing",
+    "mcp_client",
+    "gitlab_integration"
+  ],
+  "endpoints": [
+    {
+      "name": "discover",
+      "path": "/a2a/discover",
+      "method": "GET",
+      "description": "Discover agent capabilities and endpoints",
+      "accepts": ["application/json"],
+      "returns": ["application/json"]
+    },
+    {
+      "name": "invoke",
+      "path": "/a2a/invoke",
+      "method": "POST",
+      "description": "Invoke an agent capability",
+      "accepts": ["application/json"],
+      "returns": ["application/json"]
+    },
+    {
+      "name": "health",
+      "path": "/a2a/health",
+      "method": "GET",
+      "description": "Health check endpoint",
+      "accepts": ["application/json"],
+      "returns": ["application/json"]
+    },
+    {
+      "name": "handoff",
+      "path": "/a2a/handoff",
+      "method": "POST",
+      "description": "Request handoff from another agent",
+      "accepts": ["application/json"],
+      "returns": ["application/json"]
+    }
+  ],
+  "metadata": {
+    "protocol_version": "1.0",
+    "supported_message_types": [
+      "discover_request",
+      "invoke_request",
+      "handoff_request",
+      "health_check"
+    ]
+  },
+  "mcp_server": {
+    "name": "dag-harness",
+    "transport": "stdio",
+    "command": ["harness", "mcp"]
+  },
+  "owner": "DAG Harness Team",
+  "tags": ["ansible", "dag", "langgraph", "orchestration", "mcp"]
+}

@@ -1,0 +1,194 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v0.2.0)'
+        required: true
+        type: string
+      skip_pypi:
+        description: 'Skip PyPI publish'
+        required: false
+        type: boolean
+        default: false
+      skip_binaries:
+        description: 'Skip binary builds'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  # Validate version and extract info
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_tag: ${{ steps.version.outputs.version_tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+
+          # Strip 'v' prefix for version number
+          VERSION_NUM="${VERSION#v}"
+
+          echo "version=$VERSION_NUM" >> $GITHUB_OUTPUT
+          echo "version_tag=$VERSION" >> $GITHUB_OUTPUT
+
+          echo "Version: $VERSION_NUM"
+          echo "Tag: $VERSION"
+
+      - name: Verify version in pyproject.toml
+        run: |
+          PYPROJECT_VERSION=$(grep -oP 'version = "\K[^"]+' harness/pyproject.toml)
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          echo "Release version: ${{ steps.version.outputs.version }}"
+
+          if [ "$PYPROJECT_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "::warning::Version mismatch: pyproject.toml ($PYPROJECT_VERSION) vs release (${{ steps.version.outputs.version }})"
+          fi
+
+  # Build binaries
+  build-binaries:
+    if: ${{ !inputs.skip_binaries }}
+    needs: prepare
+    uses: ./.github/workflows/build-binaries.yml
+    with:
+      version: ${{ needs.prepare.outputs.version_tag }}
+    secrets: inherit
+
+  # Publish to PyPI
+  publish-pypi:
+    if: ${{ !inputs.skip_pypi }}
+    needs: prepare
+    uses: ./.github/workflows/publish-pypi.yml
+    with:
+      test_pypi: false
+    secrets: inherit
+
+  # Create GitHub Release
+  create-release:
+    needs: [prepare, build-binaries, publish-pypi]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download binary artifacts
+        if: needs.build-binaries.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+
+          # Copy binaries if available
+          if [ -d "artifacts" ]; then
+            for platform in darwin-arm64 darwin-x86_64 linux-x86_64; do
+              if [ -f "artifacts/harness-$platform/harness-$platform" ]; then
+                cp "artifacts/harness-$platform/harness-$platform" "release-assets/"
+              fi
+            done
+
+            # Copy checksums
+            if [ -f "artifacts/checksums/checksums.txt" ]; then
+              cp "artifacts/checksums/checksums.txt" "release-assets/"
+            fi
+          fi
+
+          ls -la release-assets/ || echo "No release assets"
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat << 'EOF' > release_notes.md
+          ## dag-harness ${{ needs.prepare.outputs.version_tag }}
+
+          ### Installation
+
+          **Via curl|bash (recommended):**
+          ```bash
+          curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/bootstrap.sh | bash
+          ```
+
+          **Via uv:**
+          ```bash
+          uv tool install dag-harness
+          ```
+
+          **Via pip:**
+          ```bash
+          pip install dag-harness
+          ```
+
+          **Via binary download:**
+          Download the appropriate binary for your platform from the assets below.
+
+          ### Platform Binaries
+
+          | Platform | Binary |
+          |----------|--------|
+          | macOS Apple Silicon | `harness-darwin-arm64` |
+          | macOS Intel | `harness-darwin-x86_64` |
+          | Linux x86_64 | `harness-linux-x86_64` |
+
+          ### Verification
+
+          After installation, verify with:
+          ```bash
+          harness --version
+          harness bootstrap --check-only
+          ```
+
+          ### What's New
+
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          EOF
+
+          echo "Generated release notes"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.version_tag }}
+          name: dag-harness ${{ needs.prepare.outputs.version_tag }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(needs.prepare.outputs.version_tag, '-') }}
+          files: |
+            release-assets/*
+          fail_on_unmatched_files: false
+
+      - name: Summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Binaries: ${{ needs.build-binaries.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- PyPI: ${{ needs.publish-pypi.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Links:**" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.version_tag }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [PyPI Package](https://pypi.org/project/dag-harness/${{ needs.prepare.outputs.version }}/)" >> $GITHUB_STEP_SUMMARY
