@@ -4,7 +4,7 @@ This guide walks you through installing and configuring the DAG Harness.
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Git
 - [uv](https://github.com/astral-sh/uv) package manager
 - GitLab account with API token (for MR creation)

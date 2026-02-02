@@ -92,7 +92,7 @@ build-docs:
   image: python:${PYTHON_VERSION}
   <<: *local-runner
   script:
-    - pip install mkdocs mkdocs-material pymdown-extensions
+    - pip install mkdocs mkdocs-material pymdown-extensions mkdocstrings mkdocstrings-python
     - mkdocs build --site-dir public
   artifacts:
     paths:
