@@ -6,16 +6,38 @@ This guide walks you through installing and configuring the DAG Harness.
 
 - Python 3.11+
 - Git
-- [uv](https://github.com/astral-sh/uv) package manager
+- [uv](https://github.com/astral-sh/uv) package manager (recommended) or pip
 - GitLab account with API token (for MR creation)
 
-## Installation
+## Quick Install (curl-to-shell)
+
+Bootstrap the harness in any repository with a single command:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Jesssullivan/Ansible-DAG-Harness/main/scripts/bootstrap.sh | bash
+```
+
+This will:
+
+1. Detect your platform (macOS, Linux, Rocky Linux)
+2. Find Python 3.11+ and uv/pip
+3. Install the `dag-harness` package
+4. Discover existing credentials (GITLAB_TOKEN, etc.)
+5. Run self-tests
+
+After the script completes, run the full interactive setup:
+
+```bash
+harness bootstrap
+```
+
+## Manual Installation
 
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd disposable-dag-langchain
+git clone https://github.com/Jesssullivan/Ansible-DAG-Harness.git
+cd Ansible-DAG-Harness
 ```
 
 ### 2. Install Dependencies
@@ -24,6 +46,12 @@ cd disposable-dag-langchain
 cd harness
 uv sync
 cd ..
+```
+
+Or install as a tool:
+
+```bash
+uv tool install ./harness
 ```
 
 ### 3. Bootstrap the Harness

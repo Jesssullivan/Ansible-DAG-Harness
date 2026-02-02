@@ -1,6 +1,7 @@
 #!/bin/bash
 # dag-harness bootstrap script
-# Usage: curl -sSL https://raw.githubusercontent.com/user/dag-harness/main/scripts/bootstrap.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/Jesssullivan/Ansible-DAG-Harness/main/scripts/bootstrap.sh | bash
+# Or:    curl -sSL https://disposable-ansible-dag.ephemera.xoxd.ai/scripts/bootstrap.sh | bash
 #
 # This script:
 # 1. Detects platform (darwin-arm64, darwin-x86_64, rocky-x86_64, linux-x86_64)
@@ -21,8 +22,10 @@ NC='\033[0m' # No Color
 # Configuration
 PACKAGE_NAME="dag-harness"
 MIN_PYTHON_VERSION="3.11"
-GITHUB_REPO="user/dag-harness"
+GITHUB_REPO="Jesssullivan/Ansible-DAG-Harness"
+GITLAB_REPO="tinyland/projects/dag-harness"
 GITHUB_RELEASES_URL="https://github.com/${GITHUB_REPO}/releases"
+DOCS_URL="https://disposable-ansible-dag.ephemera.xoxd.ai"
 
 # Logging functions
 log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
@@ -341,7 +344,9 @@ show_instructions() {
     echo "  3. Configure credentials:  harness credentials --prompt"
     echo "  4. Check system status:    harness bootstrap --check-only"
     echo ""
-    echo "Documentation: https://github.com/${GITHUB_REPO}"
+    echo "Documentation: ${DOCS_URL}"
+    echo "GitHub:        https://github.com/${GITHUB_REPO}"
+    echo "GitLab:        https://gitlab.com/${GITLAB_REPO}"
     echo ""
 }
 
