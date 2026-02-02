@@ -9,21 +9,20 @@ Provides:
 """
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Optional
 
-from harness.db.state import StateDB
 from harness.dag.langgraph_engine import (
-    BoxUpRoleState,
     LangGraphWorkflowRunner,
-    create_initial_state,
 )
+from harness.db.state import StateDB
 
 
 class WaveStatus(str, Enum):
     """Status of a wave execution."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -34,25 +33,27 @@ class WaveStatus(str, Enum):
 @dataclass
 class RoleExecutionResult:
     """Result of a single role execution."""
+
     role_name: str
     wave: int
     status: str
-    execution_id: Optional[int] = None
-    error: Optional[str] = None
-    duration_seconds: Optional[float] = None
-    summary: Optional[dict] = None
+    execution_id: int | None = None
+    error: str | None = None
+    duration_seconds: float | None = None
+    summary: dict | None = None
 
 
 @dataclass
 class WaveExecutionResult:
     """Result of a wave execution."""
+
     wave: int
     wave_name: str
     status: WaveStatus
     roles: list[RoleExecutionResult]
     started_at: datetime
-    completed_at: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
 
     @property
     def success_count(self) -> int:
@@ -66,6 +67,7 @@ class WaveExecutionResult:
 @dataclass
 class WaveProgress:
     """Progress tracking for parallel wave execution."""
+
     wave: int
     total_roles: int
     completed_roles: int = 0
@@ -92,25 +94,37 @@ class ParallelWaveExecutor:
 
     # Wave definitions matching CLAUDE.md
     WAVES = {
-        0: {
-            "name": "Foundation",
-            "roles": ["common"]
-        },
+        0: {"name": "Foundation", "roles": ["common"]},
         1: {
             "name": "Infrastructure Foundation",
-            "roles": ["windows_prerequisites", "ems_registry_urls", "iis-config"]
+            "roles": ["windows_prerequisites", "ems_registry_urls", "iis-config"],
         },
         2: {
             "name": "Core Platform",
-            "roles": ["ems_platform_services", "ems_web_app", "database_clone", "ems_download_artifacts"]
+            "roles": [
+                "ems_platform_services",
+                "ems_web_app",
+                "database_clone",
+                "ems_download_artifacts",
+            ],
         },
         3: {
             "name": "Web Applications",
-            "roles": ["ems_master_calendar", "ems_master_calendar_api", "ems_campus_webservice", "ems_desktop_deploy"]
+            "roles": [
+                "ems_master_calendar",
+                "ems_master_calendar_api",
+                "ems_campus_webservice",
+                "ems_desktop_deploy",
+            ],
         },
         4: {
             "name": "Supporting Services",
-            "roles": ["grafana_alloy_windows", "email_infrastructure", "hrtk_protected_users", "ems_environment_util"]
+            "roles": [
+                "grafana_alloy_windows",
+                "email_infrastructure",
+                "hrtk_protected_users",
+                "ems_environment_util",
+            ],
         },
     }
 
@@ -118,7 +132,7 @@ class ParallelWaveExecutor:
         self,
         db: StateDB,
         max_concurrent: int = 3,
-        progress_callback: Optional[Callable[[WaveProgress], None]] = None
+        progress_callback: Callable[[WaveProgress], None] | None = None,
     ):
         self.db = db
         self.max_concurrent = max_concurrent
@@ -126,11 +140,7 @@ class ParallelWaveExecutor:
         self._runner = LangGraphWorkflowRunner(db)
 
     async def _execute_role(
-        self,
-        role_name: str,
-        wave: int,
-        semaphore: asyncio.Semaphore,
-        progress: WaveProgress
+        self, role_name: str, wave: int, semaphore: asyncio.Semaphore, progress: WaveProgress
     ) -> RoleExecutionResult:
         """Execute a single role with semaphore control."""
         async with semaphore:
@@ -156,7 +166,7 @@ class ParallelWaveExecutor:
                     execution_id=result.get("execution_id"),
                     error=result.get("error"),
                     duration_seconds=duration,
-                    summary=result.get("summary")
+                    summary=result.get("summary"),
                 )
 
             except Exception as e:
@@ -168,18 +178,14 @@ class ParallelWaveExecutor:
                     wave=wave,
                     status="error",
                     error=str(e),
-                    duration_seconds=duration
+                    duration_seconds=duration,
                 )
             finally:
                 progress.current_roles.remove(role_name)
                 if self.progress_callback:
                     self.progress_callback(progress)
 
-    async def execute_wave(
-        self,
-        wave: int,
-        roles: Optional[list[str]] = None
-    ) -> WaveExecutionResult:
+    async def execute_wave(self, wave: int, roles: list[str] | None = None) -> WaveExecutionResult:
         """
         Execute all roles in a wave concurrently.
 
@@ -202,22 +208,16 @@ class ParallelWaveExecutor:
                 roles=[],
                 started_at=datetime.utcnow(),
                 completed_at=datetime.utcnow(),
-                duration_seconds=0
+                duration_seconds=0,
             )
 
-        progress = WaveProgress(
-            wave=wave,
-            total_roles=len(roles_to_execute)
-        )
+        progress = WaveProgress(wave=wave, total_roles=len(roles_to_execute))
 
         semaphore = asyncio.Semaphore(self.max_concurrent)
         started_at = datetime.utcnow()
 
         # Execute all roles concurrently
-        tasks = [
-            self._execute_role(role, wave, semaphore, progress)
-            for role in roles_to_execute
-        ]
+        tasks = [self._execute_role(role, wave, semaphore, progress) for role in roles_to_execute]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         completed_at = datetime.utcnow()
@@ -227,12 +227,11 @@ class ParallelWaveExecutor:
         role_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                role_results.append(RoleExecutionResult(
-                    role_name=roles_to_execute[i],
-                    wave=wave,
-                    status="error",
-                    error=str(result)
-                ))
+                role_results.append(
+                    RoleExecutionResult(
+                        role_name=roles_to_execute[i], wave=wave, status="error", error=str(result)
+                    )
+                )
             else:
                 role_results.append(result)
 
@@ -254,14 +253,11 @@ class ParallelWaveExecutor:
             roles=role_results,
             started_at=started_at,
             completed_at=completed_at,
-            duration_seconds=duration
+            duration_seconds=duration,
         )
 
     async def execute_all_waves(
-        self,
-        start_wave: int = 0,
-        end_wave: int = 4,
-        stop_on_wave_failure: bool = True
+        self, start_wave: int = 0, end_wave: int = 4, stop_on_wave_failure: bool = True
     ) -> list[WaveExecutionResult]:
         """
         Execute all waves sequentially, with roles within each wave in parallel.
@@ -281,7 +277,10 @@ class ParallelWaveExecutor:
             results.append(wave_result)
 
             # Check if we should stop
-            if stop_on_wave_failure and wave_result.status in (WaveStatus.FAILED, WaveStatus.PARTIAL):
+            if stop_on_wave_failure and wave_result.status in (
+                WaveStatus.FAILED,
+                WaveStatus.PARTIAL,
+            ):
                 break
 
         return results
@@ -291,7 +290,7 @@ async def execute_roles_parallel(
     db: StateDB,
     roles: list[str],
     max_concurrent: int = 3,
-    progress_callback: Optional[Callable[[WaveProgress], None]] = None
+    progress_callback: Callable[[WaveProgress], None] | None = None,
 ) -> list[RoleExecutionResult]:
     """
     Convenience function to execute arbitrary roles in parallel.

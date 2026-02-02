@@ -4,13 +4,14 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from harness.db.state import StateDB
 
 
 class MetricType(str, Enum):
     """Type of metric being tracked."""
+
     LATENCY = "latency"
     COUNT = "count"
     RATE = "rate"
@@ -20,13 +21,14 @@ class MetricType(str, Enum):
 @dataclass
 class GoldenMetric:
     """A golden metric with baseline and thresholds."""
+
     name: str
     metric_type: MetricType
     baseline_value: float
     warning_threshold: float  # Multiplier for baseline (e.g., 1.5 = 50% worse)
     critical_threshold: float  # Multiplier for baseline (e.g., 2.0 = 100% worse)
-    description: Optional[str] = None
-    unit: Optional[str] = None
+    description: str | None = None
+    unit: str | None = None
 
 
 # Default golden metrics for the harness
@@ -38,7 +40,7 @@ DEFAULT_GOLDEN_METRICS = [
         warning_threshold=1.5,  # 50% slower
         critical_threshold=2.0,  # 100% slower
         description="Time to complete box-up-role workflow",
-        unit="seconds"
+        unit="seconds",
     ),
     GoldenMetric(
         name="molecule_test_time",
@@ -47,7 +49,7 @@ DEFAULT_GOLDEN_METRICS = [
         warning_threshold=1.5,
         critical_threshold=2.0,
         description="Time to run molecule tests for a role",
-        unit="seconds"
+        unit="seconds",
     ),
     GoldenMetric(
         name="pytest_test_time",
@@ -56,7 +58,7 @@ DEFAULT_GOLDEN_METRICS = [
         warning_threshold=1.5,
         critical_threshold=2.0,
         description="Time to run pytest tests",
-        unit="seconds"
+        unit="seconds",
     ),
     GoldenMetric(
         name="db_query_time_p99",
@@ -65,7 +67,7 @@ DEFAULT_GOLDEN_METRICS = [
         warning_threshold=2.0,
         critical_threshold=5.0,
         description="99th percentile database query time",
-        unit="seconds"
+        unit="seconds",
     ),
     GoldenMetric(
         name="active_regressions",
@@ -73,7 +75,7 @@ DEFAULT_GOLDEN_METRICS = [
         baseline_value=0.0,
         warning_threshold=3.0,  # Warning if 3+ regressions
         critical_threshold=10.0,  # Critical if 10+ regressions
-        description="Number of active test regressions"
+        description="Number of active test regressions",
     ),
     GoldenMetric(
         name="cycle_detection_time",
@@ -82,7 +84,7 @@ DEFAULT_GOLDEN_METRICS = [
         warning_threshold=2.0,
         critical_threshold=5.0,
         description="Time to detect cycles in dependency graph",
-        unit="seconds"
+        unit="seconds",
     ),
     GoldenMetric(
         name="worktree_creation_time",
@@ -91,7 +93,7 @@ DEFAULT_GOLDEN_METRICS = [
         warning_threshold=1.5,
         critical_threshold=2.0,
         description="Time to create a git worktree",
-        unit="seconds"
+        unit="seconds",
     ),
     GoldenMetric(
         name="gitlab_api_latency",
@@ -100,7 +102,7 @@ DEFAULT_GOLDEN_METRICS = [
         warning_threshold=2.0,
         critical_threshold=5.0,
         description="GitLab API response time",
-        unit="seconds"
+        unit="seconds",
     ),
     GoldenMetric(
         name="sync_roles_time",
@@ -109,7 +111,7 @@ DEFAULT_GOLDEN_METRICS = [
         warning_threshold=1.5,
         critical_threshold=2.0,
         description="Time to sync roles from filesystem",
-        unit="seconds"
+        unit="seconds",
     ),
     GoldenMetric(
         name="pending_workflows",
@@ -117,7 +119,7 @@ DEFAULT_GOLDEN_METRICS = [
         baseline_value=0.0,
         warning_threshold=5.0,  # Warning if 5+ pending
         critical_threshold=20.0,  # Critical if 20+ pending
-        description="Number of pending workflow executions"
+        description="Number of pending workflow executions",
     ),
 ]
 
@@ -155,7 +157,7 @@ class GoldenMetricsTracker:
                 ON golden_metrics(name, recorded_at)
             """)
 
-    def record(self, name: str, value: float, context: Optional[dict] = None) -> str:
+    def record(self, name: str, value: float, context: dict | None = None) -> str:
         """
         Record a metric value and evaluate against baseline.
 
@@ -172,8 +174,9 @@ class GoldenMetricsTracker:
         """
         metric = self.metrics.get(name)
         if not metric:
-            raise ValueError(f"Unknown metric: {name}. "
-                           f"Available: {', '.join(sorted(self.metrics.keys()))}")
+            raise ValueError(
+                f"Unknown metric: {name}. Available: {', '.join(sorted(self.metrics.keys()))}"
+            )
 
         # Evaluate status based on metric type
         if metric.metric_type == MetricType.GAUGE:
@@ -197,16 +200,19 @@ class GoldenMetricsTracker:
 
         # Store in database
         with self.db.connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO golden_metrics (name, value, baseline, status, context)
                 VALUES (?, ?, ?, ?, ?)
-            """, (
-                name,
-                value,
-                metric.baseline_value,
-                status,
-                json.dumps(context) if context else None
-            ))
+            """,
+                (
+                    name,
+                    value,
+                    metric.baseline_value,
+                    status,
+                    json.dumps(context) if context else None,
+                ),
+            )
 
         return status
 
@@ -226,15 +232,18 @@ class GoldenMetricsTracker:
         cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
 
         with self.db.connection() as conn:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT * FROM golden_metrics
                 WHERE name = ? AND recorded_at > ?
                 ORDER BY recorded_at DESC
-            """, (name, cutoff_str)).fetchall()
+            """,
+                (name, cutoff_str),
+            ).fetchall()
 
         return [dict(row) for row in rows]
 
-    def get_latest(self, name: str) -> Optional[dict[str, Any]]:
+    def get_latest(self, name: str) -> dict[str, Any] | None:
         """
         Get the most recent value for a metric.
 
@@ -245,12 +254,15 @@ class GoldenMetricsTracker:
             Most recent metric record or None
         """
         with self.db.connection() as conn:
-            row = conn.execute("""
+            row = conn.execute(
+                """
                 SELECT * FROM golden_metrics
                 WHERE name = ?
                 ORDER BY recorded_at DESC
                 LIMIT 1
-            """, (name,)).fetchone()
+            """,
+                (name,),
+            ).fetchone()
 
         return dict(row) if row else None
 
@@ -265,12 +277,15 @@ class GoldenMetricsTracker:
 
         with self.db.connection() as conn:
             for name in self.metrics:
-                row = conn.execute("""
+                row = conn.execute(
+                    """
                     SELECT status FROM golden_metrics
                     WHERE name = ?
                     ORDER BY recorded_at DESC
                     LIMIT 1
-                """, (name,)).fetchone()
+                """,
+                    (name,),
+                ).fetchone()
 
                 summary[name] = row["status"] if row else "unknown"
 
@@ -305,7 +320,7 @@ class GoldenMetricsTracker:
             "warning": warning_count,
             "ok": ok_count,
             "unknown": unknown_count,
-            "metrics": summary
+            "metrics": summary,
         }
 
     def update_baseline(self, name: str, new_baseline: float) -> None:
@@ -330,7 +345,7 @@ class GoldenMetricsTracker:
             "golden_metric",
             0,
             "update_baseline",
-            new_value={"name": name, "baseline": new_baseline}
+            new_value={"name": name, "baseline": new_baseline},
         )
 
     def register_metric(self, metric: GoldenMetric) -> None:
@@ -372,7 +387,7 @@ class GoldenMetricsTracker:
                 "min": None,
                 "max": None,
                 "latest": None,
-                "trend": "unknown"
+                "trend": "unknown",
             }
 
         values = [r["value"] for r in records]
@@ -401,7 +416,7 @@ class GoldenMetricsTracker:
             "min": min(values),
             "max": max(values),
             "latest": latest,
-            "trend": trend
+            "trend": trend,
         }
 
     def purge_old(self, days: int = 30) -> int:
@@ -419,14 +434,20 @@ class GoldenMetricsTracker:
         cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
 
         with self.db.connection() as conn:
-            count = conn.execute("""
+            count = conn.execute(
+                """
                 SELECT COUNT(*) as c FROM golden_metrics
                 WHERE recorded_at < ?
-            """, (cutoff_str,)).fetchone()["c"]
+            """,
+                (cutoff_str,),
+            ).fetchone()["c"]
 
-            conn.execute("""
+            conn.execute(
+                """
                 DELETE FROM golden_metrics
                 WHERE recorded_at < ?
-            """, (cutoff_str,))
+            """,
+                (cutoff_str,),
+            )
 
         return count

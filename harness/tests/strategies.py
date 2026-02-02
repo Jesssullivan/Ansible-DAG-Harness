@@ -1,12 +1,17 @@
 """Hypothesis strategies for property-based testing."""
 
 from hypothesis import strategies as st
-from harness.db.models import (
-    Role, RoleDependency, DependencyType, Credential,
-    Worktree, WorktreeStatus, TestRun, TestType, TestStatus,
-    WorkflowExecution, WorkflowStatus, NodeExecution, NodeStatus
-)
 
+from harness.db.models import (
+    Credential,
+    DependencyType,
+    Role,
+    TestRun,
+    TestStatus,
+    TestType,
+    Worktree,
+    WorktreeStatus,
+)
 
 # Base strategies
 wave_strategy = st.integers(min_value=0, max_value=4)
@@ -14,7 +19,7 @@ wave_strategy = st.integers(min_value=0, max_value=4)
 role_name_strategy = st.text(
     alphabet=st.characters(whitelist_categories=("Ll", "Nd"), whitelist_characters="_"),
     min_size=1,
-    max_size=50
+    max_size=50,
 ).filter(lambda x: len(x) > 0 and x[0].isalpha() and not x.startswith("_"))
 
 
@@ -28,7 +33,7 @@ def role_strategy(draw):
         wave=draw(wave_strategy),
         wave_name=draw(st.one_of(st.none(), st.text(min_size=1, max_size=30))),
         description=draw(st.one_of(st.none(), st.text(max_size=200))),
-        has_molecule_tests=draw(st.booleans())
+        has_molecule_tests=draw(st.booleans()),
     )
 
 
@@ -61,14 +66,18 @@ def credential_strategy(draw, role_id: int = 1):
     """Generate valid Credential instances."""
     return Credential(
         role_id=role_id,
-        entry_name=draw(st.text(
-            alphabet=st.characters(whitelist_categories=("Ll", "Nd"), whitelist_characters="_-"),
-            min_size=1,
-            max_size=50
-        ).filter(lambda x: len(x) > 0 and x[0].isalpha())),
+        entry_name=draw(
+            st.text(
+                alphabet=st.characters(
+                    whitelist_categories=("Ll", "Nd"), whitelist_characters="_-"
+                ),
+                min_size=1,
+                max_size=50,
+            ).filter(lambda x: len(x) > 0 and x[0].isalpha())
+        ),
         purpose=draw(st.one_of(st.none(), st.text(max_size=100))),
         is_base58=draw(st.booleans()),
-        attribute=draw(st.one_of(st.none(), st.text(min_size=1, max_size=30)))
+        attribute=draw(st.one_of(st.none(), st.text(min_size=1, max_size=30))),
     )
 
 
@@ -83,7 +92,7 @@ def worktree_strategy(draw, role_id: int = 1):
         commits_ahead=draw(st.integers(min_value=0, max_value=100)),
         commits_behind=draw(st.integers(min_value=0, max_value=100)),
         uncommitted_changes=draw(st.integers(min_value=0, max_value=50)),
-        status=draw(worktree_status_strategy())
+        status=draw(worktree_status_strategy()),
     )
 
 
@@ -175,9 +184,11 @@ def roles_by_wave_strategy(draw):
     selected = []
     for wave, role_names in waves.items():
         count = draw(st.integers(min_value=0, max_value=len(role_names)))
-        selected_names = draw(st.sampled_from(
-            [list(combo) for combo in _combinations(role_names, count)]
-        ) if count > 0 else st.just([]))
+        selected_names = draw(
+            st.sampled_from([list(combo) for combo in _combinations(role_names, count)])
+            if count > 0
+            else st.just([])
+        )
         for name in selected_names:
             selected.append(Role(name=name, wave=wave, has_molecule_tests=True))
 
@@ -205,11 +216,9 @@ def test_run_strategy(draw, role_id: int = 1):
         test_type=draw(test_type_strategy()),
         status=draw(test_status_strategy()),
         duration_seconds=draw(st.one_of(st.none(), st.integers(min_value=1, max_value=3600))),
-        commit_sha=draw(st.one_of(st.none(), st.text(
-            alphabet="0123456789abcdef",
-            min_size=40,
-            max_size=40
-        )))
+        commit_sha=draw(
+            st.one_of(st.none(), st.text(alphabet="0123456789abcdef", min_size=40, max_size=40))
+        ),
     )
 
 
@@ -218,6 +227,7 @@ def test_run_strategy(draw, role_id: int = 1):
 def session_id_strategy(draw):
     """Generate valid session IDs."""
     import uuid
+
     return str(uuid.uuid4())
 
 

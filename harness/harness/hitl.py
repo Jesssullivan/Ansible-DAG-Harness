@@ -10,10 +10,11 @@ Provides:
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 from harness.db.state import StateDB
 from harness.notifications import (
@@ -24,37 +25,40 @@ from harness.notifications import (
 
 class HumanInputType(str, Enum):
     """Types of human input requests."""
-    APPROVAL = "approval"           # Yes/No approval
-    TEXT = "text"                   # Free-form text input
-    CHOICE = "choice"               # Select from options
-    CONFIRMATION = "confirmation"   # Confirm to proceed
-    CREDENTIAL = "credential"       # Credential input (masked)
+
+    APPROVAL = "approval"  # Yes/No approval
+    TEXT = "text"  # Free-form text input
+    CHOICE = "choice"  # Select from options
+    CONFIRMATION = "confirmation"  # Confirm to proceed
+    CREDENTIAL = "credential"  # Credential input (masked)
 
 
 @dataclass
 class HumanInputRequest:
     """A request for human input."""
+
     id: str
     execution_id: int
     node_name: str
     input_type: HumanInputType
     prompt: str
-    options: Optional[list[str]] = None  # For CHOICE type
-    default: Optional[str] = None
+    options: list[str] | None = None  # For CHOICE type
+    default: str | None = None
     required: bool = True
-    timeout_seconds: Optional[int] = None  # None = no timeout
+    timeout_seconds: int | None = None  # None = no timeout
     created_at: datetime = field(default_factory=datetime.utcnow)
-    responded_at: Optional[datetime] = None
-    response: Optional[Any] = None
+    responded_at: datetime | None = None
+    response: Any | None = None
 
 
 @dataclass
 class HumanInputResponse:
     """Response to a human input request."""
+
     request_id: str
     value: Any
     responded_at: datetime = field(default_factory=datetime.utcnow)
-    responder: Optional[str] = None  # Who provided the input
+    responder: str | None = None  # Who provided the input
 
 
 class HumanInputHandler:
@@ -68,11 +72,7 @@ class HumanInputHandler:
     - Resume workflow with collected input
     """
 
-    def __init__(
-        self,
-        db: StateDB,
-        notification_service: Optional[NotificationService] = None
-    ):
+    def __init__(self, db: StateDB, notification_service: NotificationService | None = None):
         self.db = db
         self.notification_service = notification_service
         self._pending_requests: dict[str, HumanInputRequest] = {}
@@ -85,11 +85,7 @@ class HumanInputHandler:
         return f"hitl-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{self._request_counter}"
 
     async def request_approval(
-        self,
-        execution_id: int,
-        node_name: str,
-        prompt: str,
-        timeout_seconds: Optional[int] = None
+        self, execution_id: int, node_name: str, prompt: str, timeout_seconds: int | None = None
     ) -> bool:
         """
         Request approval from a human.
@@ -110,7 +106,7 @@ class HumanInputHandler:
             input_type=HumanInputType.APPROVAL,
             prompt=prompt,
             options=["approve", "deny"],
-            timeout_seconds=timeout_seconds
+            timeout_seconds=timeout_seconds,
         )
 
         response = await self._wait_for_input(request)
@@ -125,10 +121,10 @@ class HumanInputHandler:
         execution_id: int,
         node_name: str,
         prompt: str,
-        default: Optional[str] = None,
+        default: str | None = None,
         required: bool = True,
-        timeout_seconds: Optional[int] = None
-    ) -> Optional[str]:
+        timeout_seconds: int | None = None,
+    ) -> str | None:
         """
         Request text input from a human.
 
@@ -151,7 +147,7 @@ class HumanInputHandler:
             prompt=prompt,
             default=default,
             required=required,
-            timeout_seconds=timeout_seconds
+            timeout_seconds=timeout_seconds,
         )
 
         response = await self._wait_for_input(request)
@@ -167,9 +163,9 @@ class HumanInputHandler:
         node_name: str,
         prompt: str,
         options: list[str],
-        default: Optional[str] = None,
-        timeout_seconds: Optional[int] = None
-    ) -> Optional[str]:
+        default: str | None = None,
+        timeout_seconds: int | None = None,
+    ) -> str | None:
         """
         Request selection from options.
 
@@ -192,7 +188,7 @@ class HumanInputHandler:
             prompt=prompt,
             options=options,
             default=default,
-            timeout_seconds=timeout_seconds
+            timeout_seconds=timeout_seconds,
         )
 
         response = await self._wait_for_input(request)
@@ -204,11 +200,7 @@ class HumanInputHandler:
         return value if value in options else default
 
     async def request_confirmation(
-        self,
-        execution_id: int,
-        node_name: str,
-        prompt: str,
-        timeout_seconds: Optional[int] = None
+        self, execution_id: int, node_name: str, prompt: str, timeout_seconds: int | None = None
     ) -> bool:
         """
         Request confirmation to proceed.
@@ -222,14 +214,9 @@ class HumanInputHandler:
         Returns:
             True if confirmed
         """
-        return await self.request_approval(
-            execution_id, node_name, prompt, timeout_seconds
-        )
+        return await self.request_approval(execution_id, node_name, prompt, timeout_seconds)
 
-    async def _wait_for_input(
-        self,
-        request: HumanInputRequest
-    ) -> Optional[HumanInputResponse]:
+    async def _wait_for_input(self, request: HumanInputRequest) -> HumanInputResponse | None:
         """
         Wait for human input with optional timeout.
 
@@ -247,7 +234,7 @@ class HumanInputHandler:
                     JOIN roles r ON we.role_id = r.id
                     WHERE we.id = ?
                     """,
-                    (request.execution_id,)
+                    (request.execution_id,),
                 ).fetchone()
                 role_name = row["name"] if row else "unknown"
 
@@ -256,7 +243,7 @@ class HumanInputHandler:
                 role_name=role_name,
                 execution_id=request.execution_id,
                 reason=request.prompt,
-                node_name=request.node_name
+                node_name=request.node_name,
             )
 
         # Store request in database for persistence
@@ -264,7 +251,7 @@ class HumanInputHandler:
 
         # Create an event to wait for response
         response_event = asyncio.Event()
-        response_value: Optional[HumanInputResponse] = None
+        response_value: HumanInputResponse | None = None
 
         def on_response(resp: HumanInputResponse):
             nonlocal response_value
@@ -277,11 +264,8 @@ class HumanInputHandler:
             # Wait with optional timeout
             if request.timeout_seconds:
                 try:
-                    await asyncio.wait_for(
-                        response_event.wait(),
-                        timeout=request.timeout_seconds
-                    )
-                except asyncio.TimeoutError:
+                    await asyncio.wait_for(response_event.wait(), timeout=request.timeout_seconds)
+                except TimeoutError:
                     return None
             else:
                 await response_event.wait()
@@ -304,25 +288,22 @@ class HumanInputHandler:
                 VALUES (NULL, 'hitl_request', ?, 'pending', ?)
                 """,
                 (
-                    json.dumps({
-                        "request_id": request.id,
-                        "execution_id": request.execution_id,
-                        "node_name": request.node_name,
-                        "input_type": request.input_type.value,
-                        "prompt": request.prompt,
-                        "options": request.options,
-                        "default": request.default
-                    }),
-                    request.prompt
-                )
+                    json.dumps(
+                        {
+                            "request_id": request.id,
+                            "execution_id": request.execution_id,
+                            "node_name": request.node_name,
+                            "input_type": request.input_type.value,
+                            "prompt": request.prompt,
+                            "options": request.options,
+                            "default": request.default,
+                        }
+                    ),
+                    request.prompt,
+                ),
             )
 
-    def submit_response(
-        self,
-        request_id: str,
-        value: Any,
-        responder: Optional[str] = None
-    ) -> bool:
+    def submit_response(self, request_id: str, value: Any, responder: str | None = None) -> bool:
         """
         Submit a response to a pending input request.
 
@@ -338,11 +319,7 @@ class HumanInputHandler:
             return False
 
         request = self._pending_requests[request_id]
-        response = HumanInputResponse(
-            request_id=request_id,
-            value=value,
-            responder=responder
-        )
+        response = HumanInputResponse(request_id=request_id, value=value, responder=responder)
 
         request.responded_at = response.responded_at
         request.response = value
@@ -354,10 +331,7 @@ class HumanInputHandler:
 
         return True
 
-    def get_pending_requests(
-        self,
-        execution_id: Optional[int] = None
-    ) -> list[HumanInputRequest]:
+    def get_pending_requests(self, execution_id: int | None = None) -> list[HumanInputRequest]:
         """
         Get all pending input requests.
 
@@ -388,10 +362,7 @@ class HumanInputHandler:
         # Trigger callback with None to unblock
         callback = self._response_callbacks.get(request_id)
         if callback:
-            callback(HumanInputResponse(
-                request_id=request_id,
-                value=None
-            ))
+            callback(HumanInputResponse(request_id=request_id, value=None))
 
         return True
 
@@ -442,11 +413,7 @@ class BreakpointManager:
         """Check if a node has a breakpoint."""
         return node_name in self._breakpoints or node_name in self._one_shot_breakpoints
 
-    async def handle_breakpoint(
-        self,
-        execution_id: int,
-        node_name: str
-    ) -> bool:
+    async def handle_breakpoint(self, execution_id: int, node_name: str) -> bool:
         """
         Handle a breakpoint hit.
 
@@ -465,7 +432,7 @@ class BreakpointManager:
         return await self.hitl.request_confirmation(
             execution_id=execution_id,
             node_name=node_name,
-            prompt=f"Breakpoint hit at '{node_name}'. Continue execution?"
+            prompt=f"Breakpoint hit at '{node_name}'. Continue execution?",
         )
 
     def list_breakpoints(self) -> list[dict]:

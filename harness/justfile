@@ -1,0 +1,135 @@
+# dag-harness development justfile
+# Run `just` to see available recipes
+
+set dotenv-load := true
+
+# Default - show help
+default:
+    @just --list --unsorted
+
+# =============================================================================
+# SETUP
+# =============================================================================
+
+# Install all dependencies
+setup:
+    uv sync --all-extras
+
+# =============================================================================
+# TESTING
+# =============================================================================
+
+# Run all tests
+test *ARGS:
+    uv run pytest {{ARGS}}
+
+# Run unit tests only
+test-unit:
+    uv run pytest -m unit
+
+# Run property-based tests with stats
+test-pbt:
+    uv run pytest -m pbt --hypothesis-show-statistics
+
+# Run integration tests
+test-integration:
+    uv run pytest -m integration
+
+# Run tests excluding slow
+test-fast:
+    uv run pytest -m "not slow"
+
+# Run tests with coverage
+test-cov:
+    uv run pytest --cov=harness --cov-report=term-missing --cov-report=html
+
+# Run tests with coverage threshold (50% for alpha, target 80% for beta)
+test-cov-check threshold="50":
+    uv run pytest --cov=harness --cov-fail-under={{threshold}}
+
+# Run specific test file
+test-file FILE:
+    uv run pytest {{FILE}} -v
+
+# Run tests matching pattern
+test-match PATTERN:
+    uv run pytest -k "{{PATTERN}}" -v
+
+# =============================================================================
+# LINTING
+# =============================================================================
+
+# Run ruff linter
+lint:
+    uv run ruff check harness tests
+
+# Auto-fix lint issues
+lint-fix:
+    uv run ruff check --fix harness tests
+
+# Format code
+format:
+    uv run ruff format harness tests
+
+# Check formatting only
+format-check:
+    uv run ruff format --check harness tests
+
+# All style checks
+check-style: lint format-check
+
+# =============================================================================
+# DATABASE
+# =============================================================================
+
+# Initialize database
+db-init:
+    uv run harness init
+
+# Reset database (destructive)
+[confirm("This will DELETE ALL DATA. Continue?")]
+db-reset:
+    uv run harness db reset --yes
+
+# Show database stats
+db-stats:
+    uv run harness db stats
+
+# =============================================================================
+# CI SIMULATION
+# =============================================================================
+
+# Run all CI checks (mirrors GitHub Actions)
+check-all: check-style test-cov-check
+
+# =============================================================================
+# DEVELOPMENT
+# =============================================================================
+
+# Run CLI command
+run *ARGS:
+    uv run harness {{ARGS}}
+
+# Bootstrap check
+bootstrap-check:
+    uv run harness bootstrap --check-only
+
+# Show credentials status
+credentials:
+    uv run harness credentials
+
+# Clean build artifacts
+clean:
+    rm -rf dist/ build/ *.egg-info/ .coverage htmlcov/ .pytest_cache/
+
+# =============================================================================
+# BUILD
+# =============================================================================
+
+# Build package
+build:
+    uv build
+
+# Show version
+version:
+    @grep '^__version__' harness/__init__.py

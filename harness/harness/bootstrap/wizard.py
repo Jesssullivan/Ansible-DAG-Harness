@@ -13,11 +13,9 @@ import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Callable
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
 from rich.table import Table
 
 from harness.bootstrap.credentials import CredentialDiscovery, CredentialStatus
@@ -27,6 +25,7 @@ from harness.bootstrap.selftest import SelfTester, TestStatus
 
 class WizardStep(Enum):
     """Steps in the bootstrap wizard."""
+
     DETECT_ENV = "detect_env"
     CHECK_CREDENTIALS = "check_credentials"
     CHECK_PATHS = "check_paths"
@@ -39,8 +38,9 @@ class WizardStep(Enum):
 @dataclass
 class WizardState:
     """State maintained across wizard steps."""
+
     current_step: WizardStep = WizardStep.DETECT_ENV
-    project_root: Optional[Path] = None
+    project_root: Path | None = None
     credentials_ok: bool = False
     paths_ok: bool = False
     database_ok: bool = False
@@ -58,6 +58,7 @@ class WizardState:
 @dataclass
 class WizardResult:
     """Final result of running the wizard."""
+
     success: bool
     state: WizardState
     message: str
@@ -72,9 +73,9 @@ class BootstrapWizard:
 
     def __init__(
         self,
-        project_root: Optional[Path] = None,
-        console: Optional[Console] = None,
-        interactive: bool = True
+        project_root: Path | None = None,
+        console: Console | None = None,
+        interactive: bool = True,
     ):
         """Initialize the wizard.
 
@@ -172,9 +173,7 @@ class BootstrapWizard:
         self.console.print("\n[bold]Paths:[/bold]")
         path_result = self.path_resolver.check_all()
         for path in path_result.paths:
-            status_str = self._status_icon(
-                path.status in (PathStatus.VALID, PathStatus.WRITABLE)
-            )
+            status_str = self._status_icon(path.status in (PathStatus.VALID, PathStatus.WRITABLE))
             self.console.print(f"  {status_str} {path.name}")
             if path.path:
                 self.console.print(f"      [dim]{path.path}[/dim]")
@@ -186,7 +185,8 @@ class BootstrapWizard:
 
         # Check installation
         self.console.print("\n[bold]MCP client Integration:[/bold]")
-        from harness.install import MCPInstaller, InstallStatus
+        from harness.install import InstallStatus, MCPInstaller
+
         installer = MCPInstaller(self.project_root)
         install_status, components = installer.check()
 
@@ -217,15 +217,19 @@ class BootstrapWizard:
         # Summary
         self.console.print()
         if all_ok:
-            self.console.print(Panel(
-                "[green]All checks passed![/green]\n\nHarness is properly configured.",
-                title="Bootstrap Status"
-            ))
+            self.console.print(
+                Panel(
+                    "[green]All checks passed![/green]\n\nHarness is properly configured.",
+                    title="Bootstrap Status",
+                )
+            )
         else:
-            self.console.print(Panel(
-                "[yellow]Some checks failed.[/yellow]\n\nRun 'harness bootstrap' to fix issues.",
-                title="Bootstrap Status"
-            ))
+            self.console.print(
+                Panel(
+                    "[yellow]Some checks failed.[/yellow]\n\nRun 'harness bootstrap' to fix issues.",
+                    title="Bootstrap Status",
+                )
+            )
 
         self.state.credentials_ok = cred_result.all_required_present
         self.state.paths_ok = path_result.all_valid
@@ -235,16 +239,18 @@ class BootstrapWizard:
         return WizardResult(
             success=all_ok,
             state=self.state,
-            message="Check complete" if all_ok else "Some checks failed"
+            message="Check complete" if all_ok else "Some checks failed",
         )
 
     def _print_header(self):
         """Print wizard header."""
-        self.console.print(Panel(
-            "[bold blue]DAG Harness Bootstrap Wizard[/bold blue]\n\n"
-            "This wizard will guide you through setting up the harness.",
-            title="Welcome"
-        ))
+        self.console.print(
+            Panel(
+                "[bold blue]DAG Harness Bootstrap Wizard[/bold blue]\n\n"
+                "This wizard will guide you through setting up the harness.",
+                title="Welcome",
+            )
+        )
 
     def _step_detect_env(self):
         """Step 1: Detect environment."""
@@ -310,10 +316,14 @@ class BootstrapWizard:
             self.state.credentials_ok = True
         else:
             missing = result.missing_required
-            self.console.print(f"\n[yellow]Missing required credentials: {', '.join(missing)}[/yellow]")
+            self.console.print(
+                f"\n[yellow]Missing required credentials: {', '.join(missing)}[/yellow]"
+            )
 
             if self.interactive:
-                self.console.print("\n[dim]Set these environment variables and re-run bootstrap.[/dim]")
+                self.console.print(
+                    "\n[dim]Set these environment variables and re-run bootstrap.[/dim]"
+                )
                 self.console.print("[dim]Example: export GITLAB_TOKEN=glpat-xxx[/dim]")
 
             self.state.warnings.append(f"Missing credentials: {', '.join(missing)}")
@@ -355,8 +365,7 @@ class BootstrapWizard:
             from harness.db.state import StateDB
 
             db_path = os.environ.get(
-                "HARNESS_DB_PATH",
-                str(self.project_root / "harness" / "harness.db")
+                "HARNESS_DB_PATH", str(self.project_root / "harness" / "harness.db")
             )
 
             self.console.print(f"  Database path: {db_path}")
@@ -385,7 +394,7 @@ class BootstrapWizard:
         self.console.print("\n[bold]Step 5: Installing MCP client Integration[/bold]\n")
 
         try:
-            from harness.install import MCPInstaller, InstallStatus
+            from harness.install import InstallStatus, MCPInstaller
 
             installer = MCPInstaller(self.project_root)
 
@@ -466,22 +475,18 @@ class BootstrapWizard:
     def _make_result(self, success: bool, message: str) -> WizardResult:
         """Create wizard result."""
         if success:
-            self.console.print(Panel(
-                f"[green]{message}[/green]\n\n"
-                "The harness is ready to use.\n"
-                "Try: harness status",
-                title="Bootstrap Complete"
-            ))
+            self.console.print(
+                Panel(
+                    f"[green]{message}[/green]\n\n"
+                    "The harness is ready to use.\n"
+                    "Try: harness status",
+                    title="Bootstrap Complete",
+                )
+            )
         else:
             error_list = "\n".join(f"  - {e}" for e in self.state.errors)
-            self.console.print(Panel(
-                f"[red]{message}[/red]\n\n"
-                f"Errors:\n{error_list}",
-                title="Bootstrap Failed"
-            ))
+            self.console.print(
+                Panel(f"[red]{message}[/red]\n\nErrors:\n{error_list}", title="Bootstrap Failed")
+            )
 
-        return WizardResult(
-            success=success,
-            state=self.state,
-            message=message
-        )
+        return WizardResult(success=success, state=self.state, message=message)

@@ -6,10 +6,11 @@ Uses adjacency list pattern with recursive CTEs for dependency traversal.
 
 import json
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any
 
 from harness.db.models import (
     ActiveRegressionView,
@@ -22,7 +23,6 @@ from harness.db.models import (
     MergeRequest,
     MergeTrainEntry,
     MergeTrainStatus,
-    NodeExecution,
     NodeStatus,
     RegressionStatus,
     Role,
@@ -32,10 +32,8 @@ from harness.db.models import (
     TestRun,
     TestStatus,
     TestType,
-    ToolInvocation,
-    Worktree,
-    WorkflowExecution,
     WorkflowStatus,
+    Worktree,
     WorktreeStatus,
 )
 
@@ -114,28 +112,30 @@ class StateDB:
                     has_molecule_tests = excluded.has_molecule_tests
                 RETURNING id
                 """,
-                (role.name, role.wave, role.wave_name, role.description,
-                 role.molecule_path, role.has_molecule_tests)
+                (
+                    role.name,
+                    role.wave,
+                    role.wave_name,
+                    role.description,
+                    role.molecule_path,
+                    role.has_molecule_tests,
+                ),
             )
             return cursor.fetchone()[0]
 
-    def get_role(self, name: str) -> Optional[Role]:
+    def get_role(self, name: str) -> Role | None:
         """Get role by name."""
         with self.connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM roles WHERE name = ?", (name,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM roles WHERE name = ?", (name,)).fetchone()
             return Role(**dict(row)) if row else None
 
-    def get_role_by_id(self, role_id: int) -> Optional[Role]:
+    def get_role_by_id(self, role_id: int) -> Role | None:
         """Get role by ID."""
         with self.connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM roles WHERE id = ?", (role_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
             return Role(**dict(row)) if row else None
 
-    def list_roles(self, wave: Optional[int] = None) -> list[Role]:
+    def list_roles(self, wave: int | None = None) -> list[Role]:
         """List all roles, optionally filtered by wave."""
         with self.connection() as conn:
             if wave is not None:
@@ -143,25 +143,19 @@ class StateDB:
                     "SELECT * FROM roles WHERE wave = ? ORDER BY name", (wave,)
                 ).fetchall()
             else:
-                rows = conn.execute(
-                    "SELECT * FROM roles ORDER BY wave, name"
-                ).fetchall()
+                rows = conn.execute("SELECT * FROM roles ORDER BY wave, name").fetchall()
             return [Role(**dict(row)) for row in rows]
 
-    def get_role_status(self, name: str) -> Optional[RoleStatusView]:
+    def get_role_status(self, name: str) -> RoleStatusView | None:
         """Get aggregated role status from view."""
         with self.connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM v_role_status WHERE name = ?", (name,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM v_role_status WHERE name = ?", (name,)).fetchone()
             return RoleStatusView(**dict(row)) if row else None
 
     def list_role_statuses(self) -> list[RoleStatusView]:
         """List all role statuses."""
         with self.connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM v_role_status ORDER BY wave, name"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM v_role_status ORDER BY wave, name").fetchall()
             return [RoleStatusView(**dict(row)) for row in rows]
 
     # =========================================================================
@@ -179,7 +173,7 @@ class StateDB:
                     source_file = excluded.source_file
                 RETURNING id
                 """,
-                (dep.role_id, dep.depends_on_id, dep.dependency_type.value, dep.source_file)
+                (dep.role_id, dep.depends_on_id, dep.dependency_type.value, dep.source_file),
             )
             return cursor.fetchone()[0]
 
@@ -219,7 +213,7 @@ class StateDB:
                     GROUP BY r.name
                     ORDER BY depth, r.name
                     """,
-                    (role.id,)
+                    (role.id,),
                 ).fetchall()
             else:
                 # Direct dependencies only
@@ -231,12 +225,14 @@ class StateDB:
                     WHERE rd.role_id = ?
                     ORDER BY r.name
                     """,
-                    (role.id,)
+                    (role.id,),
                 ).fetchall()
 
             return [(row["name"], row["depth"]) for row in rows]
 
-    def get_reverse_dependencies(self, role_name: str, transitive: bool = False) -> list[tuple[str, int]]:
+    def get_reverse_dependencies(
+        self, role_name: str, transitive: bool = False
+    ) -> list[tuple[str, int]]:
         """
         Get roles that depend on the given role.
 
@@ -272,7 +268,7 @@ class StateDB:
                     GROUP BY r.name
                     ORDER BY depth, r.name
                     """,
-                    (role.id,)
+                    (role.id,),
                 ).fetchall()
             else:
                 # Direct reverse dependencies only
@@ -284,7 +280,7 @@ class StateDB:
                     WHERE rd.depends_on_id = ?
                     ORDER BY r.name
                     """,
-                    (role.id,)
+                    (role.id,),
                 ).fetchall()
 
             return [(row["name"], row["depth"]) for row in rows]
@@ -313,8 +309,10 @@ class StateDB:
         """
         with self.connection() as conn:
             # Get all roles
-            roles = {row["name"]: row["id"] for row in
-                     conn.execute("SELECT id, name FROM roles").fetchall()}
+            roles = {
+                row["name"]: row["id"]
+                for row in conn.execute("SELECT id, name FROM roles").fetchall()
+            }
 
             if not roles:
                 return []
@@ -341,10 +339,14 @@ class StateDB:
 
             while queue:
                 # Sort by wave for consistent ordering within same dependency level
-                queue.sort(key=lambda n: (
-                    conn.execute("SELECT wave FROM roles WHERE name = ?", (n,)).fetchone()["wave"],
-                    n
-                ))
+                queue.sort(
+                    key=lambda n: (
+                        conn.execute("SELECT wave FROM roles WHERE name = ?", (n,)).fetchone()[
+                            "wave"
+                        ],
+                        n,
+                    )
+                )
                 node = queue.pop(0)
                 result.append(node)
 
@@ -363,7 +365,7 @@ class StateDB:
                     cycle_path = self._find_cycle_path(graph, cycle_nodes)
                     raise CyclicDependencyError(
                         f"Cyclic dependency detected: {' -> '.join(cycle_path)}",
-                        cycle_path=cycle_path
+                        cycle_path=cycle_path,
                     )
 
             return result
@@ -432,8 +434,7 @@ class StateDB:
         """
         with self.connection() as conn:
             # Get all roles
-            roles = list(row["name"] for row in
-                         conn.execute("SELECT name FROM roles").fetchall())
+            roles = list(row["name"] for row in conn.execute("SELECT name FROM roles").fetchall())
 
             # Build adjacency list: role -> [roles it depends on]
             deps_graph: dict[str, list[str]] = {name: [] for name in roles}
@@ -537,7 +538,7 @@ class StateDB:
             "valid": len(cycles) == 0 and len(missing_deps) == 0 and len(self_dep_roles) == 0,
             "cycles": cycles,
             "missing_deps": missing_deps,
-            "self_deps": self_dep_roles
+            "self_deps": self_dep_roles,
         }
 
     # =========================================================================
@@ -561,8 +562,15 @@ class StateDB:
                     source_line = excluded.source_line
                 RETURNING id
                 """,
-                (cred.role_id, cred.entry_name, cred.purpose, cred.is_base58,
-                 attr, cred.source_file, cred.source_line)
+                (
+                    cred.role_id,
+                    cred.entry_name,
+                    cred.purpose,
+                    cred.is_base58,
+                    attr,
+                    cred.source_file,
+                    cred.source_line,
+                ),
             )
             return cursor.fetchone()[0]
 
@@ -600,28 +608,34 @@ class StateDB:
                     status = excluded.status
                 RETURNING id
                 """,
-                (worktree.role_id, worktree.path, worktree.branch, worktree.base_commit,
-                 worktree.current_commit, worktree.commits_ahead, worktree.commits_behind,
-                 worktree.uncommitted_changes, worktree.status.value)
+                (
+                    worktree.role_id,
+                    worktree.path,
+                    worktree.branch,
+                    worktree.base_commit,
+                    worktree.current_commit,
+                    worktree.commits_ahead,
+                    worktree.commits_behind,
+                    worktree.uncommitted_changes,
+                    worktree.status.value,
+                ),
             )
             return cursor.fetchone()[0]
 
-    def get_worktree(self, role_name: str) -> Optional[Worktree]:
+    def get_worktree(self, role_name: str) -> Worktree | None:
         """Get worktree for a role."""
         with self.connection() as conn:
             role = self.get_role(role_name)
             if not role or not role.id:
                 return None
-            row = conn.execute(
-                "SELECT * FROM worktrees WHERE role_id = ?", (role.id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM worktrees WHERE role_id = ?", (role.id,)).fetchone()
             if row:
                 data = dict(row)
                 data["status"] = WorktreeStatus(data["status"])
                 return Worktree(**data)
             return None
 
-    def list_worktrees(self, status: Optional[WorktreeStatus] = None) -> list[Worktree]:
+    def list_worktrees(self, status: WorktreeStatus | None = None) -> list[Worktree]:
         """List all worktrees."""
         with self.connection() as conn:
             if status:
@@ -655,8 +669,14 @@ class StateDB:
                     due_date = excluded.due_date,
                     group_id = excluded.group_id
                 """,
-                (iteration.id, iteration.title, iteration.state,
-                 iteration.start_date, iteration.due_date, iteration.group_id)
+                (
+                    iteration.id,
+                    iteration.title,
+                    iteration.state,
+                    iteration.start_date,
+                    iteration.due_date,
+                    iteration.group_id,
+                ),
             )
             return iteration.id
 
@@ -678,8 +698,18 @@ class StateDB:
                     assignee = excluded.assignee,
                     weight = excluded.weight
                 """,
-                (issue.id, issue.iid, issue.role_id, issue.iteration_id, issue.title,
-                 issue.state, issue.web_url, issue.labels, issue.assignee, issue.weight)
+                (
+                    issue.id,
+                    issue.iid,
+                    issue.role_id,
+                    issue.iteration_id,
+                    issue.title,
+                    issue.state,
+                    issue.web_url,
+                    issue.labels,
+                    issue.assignee,
+                    issue.weight,
+                ),
             )
             return issue.id
 
@@ -704,12 +734,24 @@ class StateDB:
                     squash_on_merge = excluded.squash_on_merge,
                     remove_source_branch = excluded.remove_source_branch
                 """,
-                (mr.id, mr.iid, mr.role_id, mr.issue_id, mr.source_branch, mr.target_branch,
-                 mr.title, mr.state, mr.web_url, mr.merge_status, mr.squash_on_merge, mr.remove_source_branch)
+                (
+                    mr.id,
+                    mr.iid,
+                    mr.role_id,
+                    mr.issue_id,
+                    mr.source_branch,
+                    mr.target_branch,
+                    mr.title,
+                    mr.state,
+                    mr.web_url,
+                    mr.merge_status,
+                    mr.squash_on_merge,
+                    mr.remove_source_branch,
+                ),
             )
             return mr.id
 
-    def get_issue(self, role_name: str) -> Optional[Issue]:
+    def get_issue(self, role_name: str) -> Issue | None:
         """Get issue for a role."""
         with self.connection() as conn:
             role = self.get_role(role_name)
@@ -717,11 +759,11 @@ class StateDB:
                 return None
             row = conn.execute(
                 "SELECT * FROM issues WHERE role_id = ? ORDER BY created_at DESC LIMIT 1",
-                (role.id,)
+                (role.id,),
             ).fetchone()
             return Issue(**dict(row)) if row else None
 
-    def get_merge_request(self, role_name: str) -> Optional[MergeRequest]:
+    def get_merge_request(self, role_name: str) -> MergeRequest | None:
         """Get merge request for a role."""
         with self.connection() as conn:
             role = self.get_role(role_name)
@@ -729,7 +771,7 @@ class StateDB:
                 return None
             row = conn.execute(
                 "SELECT * FROM merge_requests WHERE role_id = ? ORDER BY created_at DESC LIMIT 1",
-                (role.id,)
+                (role.id,),
             ).fetchone()
             return MergeRequest(**dict(row)) if row else None
 
@@ -737,8 +779,9 @@ class StateDB:
     # WORKFLOW EXECUTION OPERATIONS
     # =========================================================================
 
-    def create_workflow_definition(self, name: str, description: str,
-                                   nodes: list[dict], edges: list[dict]) -> int:
+    def create_workflow_definition(
+        self, name: str, description: str, nodes: list[dict], edges: list[dict]
+    ) -> int:
         """Create a workflow definition."""
         with self.connection() as conn:
             cursor = conn.execute(
@@ -751,7 +794,7 @@ class StateDB:
                     edges_json = excluded.edges_json
                 RETURNING id
                 """,
-                (name, description, json.dumps(nodes), json.dumps(edges))
+                (name, description, json.dumps(nodes), json.dumps(edges)),
             )
             return cursor.fetchone()[0]
 
@@ -774,13 +817,17 @@ class StateDB:
                 VALUES (?, ?, ?)
                 RETURNING id
                 """,
-                (workflow["id"], role.id, WorkflowStatus.PENDING.value)
+                (workflow["id"], role.id, WorkflowStatus.PENDING.value),
             )
             return cursor.fetchone()[0]
 
-    def update_execution_status(self, execution_id: int, status: WorkflowStatus,
-                                current_node: Optional[str] = None,
-                                error_message: Optional[str] = None) -> None:
+    def update_execution_status(
+        self,
+        execution_id: int,
+        status: WorkflowStatus,
+        current_node: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
         """Update workflow execution status."""
         with self.connection() as conn:
             now = datetime.utcnow().isoformat()
@@ -798,14 +845,17 @@ class StateDB:
             if status == WorkflowStatus.RUNNING:
                 updates.append("started_at = COALESCE(started_at, ?)")
                 params.append(now)
-            elif status in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED):
+            elif status in (
+                WorkflowStatus.COMPLETED,
+                WorkflowStatus.FAILED,
+                WorkflowStatus.CANCELLED,
+            ):
                 updates.append("completed_at = ?")
                 params.append(now)
 
             params.append(execution_id)
             conn.execute(
-                f"UPDATE workflow_executions SET {', '.join(updates)} WHERE id = ?",
-                params
+                f"UPDATE workflow_executions SET {', '.join(updates)} WHERE id = ?", params
             )
 
     def checkpoint_execution(self, execution_id: int, checkpoint_data: dict) -> None:
@@ -813,24 +863,28 @@ class StateDB:
         with self.connection() as conn:
             conn.execute(
                 "UPDATE workflow_executions SET checkpoint_data = ? WHERE id = ?",
-                (json.dumps(checkpoint_data), execution_id)
+                (json.dumps(checkpoint_data), execution_id),
             )
 
-    def get_checkpoint(self, execution_id: int) -> Optional[dict]:
+    def get_checkpoint(self, execution_id: int) -> dict | None:
         """Get checkpoint data for resumption."""
         with self.connection() as conn:
             row = conn.execute(
-                "SELECT checkpoint_data FROM workflow_executions WHERE id = ?",
-                (execution_id,)
+                "SELECT checkpoint_data FROM workflow_executions WHERE id = ?", (execution_id,)
             ).fetchone()
             if row and row["checkpoint_data"]:
                 return json.loads(row["checkpoint_data"])
             return None
 
-    def update_node_execution(self, execution_id: int, node_name: str,
-                              status: NodeStatus, input_data: Optional[dict] = None,
-                              output_data: Optional[dict] = None,
-                              error_message: Optional[str] = None) -> int:
+    def update_node_execution(
+        self,
+        execution_id: int,
+        node_name: str,
+        status: NodeStatus,
+        input_data: dict | None = None,
+        output_data: dict | None = None,
+        error_message: str | None = None,
+    ) -> int:
         """Update or create node execution record."""
         with self.connection() as conn:
             now = datetime.utcnow().isoformat()
@@ -850,10 +904,16 @@ class StateDB:
                                        ELSE node_executions.retry_count END
                 RETURNING id
                 """,
-                (execution_id, node_name, status.value,
-                 json.dumps(input_data) if input_data else None,
-                 json.dumps(output_data) if output_data else None,
-                 error_message, now, now)
+                (
+                    execution_id,
+                    node_name,
+                    status.value,
+                    json.dumps(input_data) if input_data else None,
+                    json.dumps(output_data) if output_data else None,
+                    error_message,
+                    now,
+                    now,
+                ),
             )
             return cursor.fetchone()[0]
 
@@ -871,16 +931,28 @@ class StateDB:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
-                (test_run.role_id, test_run.worktree_id, test_run.execution_id,
-                 test_run.test_type.value, test_run.status.value, test_run.duration_seconds,
-                 test_run.log_path, test_run.output_json, test_run.commit_sha,
-                 test_run.started_at or datetime.utcnow().isoformat())
+                (
+                    test_run.role_id,
+                    test_run.worktree_id,
+                    test_run.execution_id,
+                    test_run.test_type.value,
+                    test_run.status.value,
+                    test_run.duration_seconds,
+                    test_run.log_path,
+                    test_run.output_json,
+                    test_run.commit_sha,
+                    test_run.started_at or datetime.utcnow().isoformat(),
+                ),
             )
             return cursor.fetchone()[0]
 
-    def update_test_run(self, test_run_id: int, status: TestStatus,
-                        duration_seconds: Optional[int] = None,
-                        output_json: Optional[str] = None) -> None:
+    def update_test_run(
+        self,
+        test_run_id: int,
+        status: TestStatus,
+        duration_seconds: int | None = None,
+        output_json: str | None = None,
+    ) -> None:
         """Update test run status."""
         with self.connection() as conn:
             now = datetime.utcnow().isoformat()
@@ -893,7 +965,7 @@ class StateDB:
                     completed_at = ?
                 WHERE id = ?
                 """,
-                (status.value, duration_seconds, output_json, now, test_run_id)
+                (status.value, duration_seconds, output_json, now, test_run_id),
             )
 
     def get_recent_test_runs(self, role_name: str, limit: int = 10) -> list[TestRun]:
@@ -909,7 +981,7 @@ class StateDB:
                 ORDER BY created_at DESC
                 LIMIT ?
                 """,
-                (role.id, limit)
+                (role.id, limit),
             ).fetchall()
             return [TestRun(**dict(row)) for row in rows]
 
@@ -917,9 +989,15 @@ class StateDB:
     # AUDIT LOGGING
     # =========================================================================
 
-    def log_audit(self, entity_type: str, entity_id: int, action: str,
-                  old_value: Optional[dict] = None, new_value: Optional[dict] = None,
-                  actor: str = "harness") -> None:
+    def log_audit(
+        self,
+        entity_type: str,
+        entity_id: int,
+        action: str,
+        old_value: dict | None = None,
+        new_value: dict | None = None,
+        actor: str = "harness",
+    ) -> None:
         """Log an audit entry."""
         with self.connection() as conn:
             conn.execute(
@@ -927,20 +1005,28 @@ class StateDB:
                 INSERT INTO audit_log (entity_type, entity_id, action, old_value, new_value, actor)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (entity_type, entity_id, action,
-                 json.dumps(old_value) if old_value else None,
-                 json.dumps(new_value) if new_value else None,
-                 actor)
+                (
+                    entity_type,
+                    entity_id,
+                    action,
+                    json.dumps(old_value) if old_value else None,
+                    json.dumps(new_value) if new_value else None,
+                    actor,
+                ),
             )
 
     # =========================================================================
     # EXECUTION CONTEXT OPERATIONS (SEE/ACP)
     # =========================================================================
 
-    def create_context(self, session_id: str, user_id: Optional[str] = None,
-                       request_id: Optional[str] = None,
-                       capabilities: Optional[list[str]] = None,
-                       metadata: Optional[dict] = None) -> int:
+    def create_context(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        request_id: str | None = None,
+        capabilities: list[str] | None = None,
+        metadata: dict | None = None,
+    ) -> int:
         """Create a new execution context for a MCP client session."""
         with self.connection() as conn:
             cursor = conn.execute(
@@ -954,17 +1040,25 @@ class StateDB:
                     metadata = excluded.metadata
                 RETURNING id
                 """,
-                (session_id, user_id, request_id,
-                 json.dumps(capabilities) if capabilities else None,
-                 json.dumps(metadata) if metadata else None)
+                (
+                    session_id,
+                    user_id,
+                    request_id,
+                    json.dumps(capabilities) if capabilities else None,
+                    json.dumps(metadata) if metadata else None,
+                ),
             )
             context_id = cursor.fetchone()[0]
         # Log audit after connection closes to avoid nested connection lock
-        self.log_audit("execution_context", context_id, "create",
-                       new_value={"session_id": session_id, "user_id": user_id})
+        self.log_audit(
+            "execution_context",
+            context_id,
+            "create",
+            new_value={"session_id": session_id, "user_id": user_id},
+        )
         return context_id
 
-    def get_context(self, session_id: str) -> Optional[ExecutionContext]:
+    def get_context(self, session_id: str) -> ExecutionContext | None:
         """Get execution context by session ID."""
         with self.connection() as conn:
             row = conn.execute(
@@ -972,7 +1066,7 @@ class StateDB:
             ).fetchone()
             return ExecutionContext(**dict(row)) if row else None
 
-    def get_context_by_id(self, context_id: int) -> Optional[ExecutionContext]:
+    def get_context_by_id(self, context_id: int) -> ExecutionContext | None:
         """Get execution context by ID."""
         with self.connection() as conn:
             row = conn.execute(
@@ -980,10 +1074,14 @@ class StateDB:
             ).fetchone()
             return ExecutionContext(**dict(row)) if row else None
 
-    def grant_capability(self, context_id: int, capability: str,
-                         scope: Optional[str] = None,
-                         granted_by: str = "system",
-                         expires_at: Optional[datetime] = None) -> int:
+    def grant_capability(
+        self,
+        context_id: int,
+        capability: str,
+        scope: str | None = None,
+        granted_by: str = "system",
+        expires_at: datetime | None = None,
+    ) -> int:
         """Grant a capability to an execution context."""
         with self.connection() as conn:
             cursor = conn.execute(
@@ -996,17 +1094,25 @@ class StateDB:
                     revoked_at = NULL
                 RETURNING id
                 """,
-                (context_id, capability, scope, granted_by,
-                 expires_at.isoformat() if expires_at else None)
+                (
+                    context_id,
+                    capability,
+                    scope,
+                    granted_by,
+                    expires_at.isoformat() if expires_at else None,
+                ),
             )
             cap_id = cursor.fetchone()[0]
         # Log audit after connection closes to avoid nested connection lock
-        self.log_audit("context_capability", cap_id, "grant",
-                       new_value={"capability": capability, "scope": scope})
+        self.log_audit(
+            "context_capability",
+            cap_id,
+            "grant",
+            new_value={"capability": capability, "scope": scope},
+        )
         return cap_id
 
-    def revoke_capability(self, context_id: int, capability: str,
-                          scope: Optional[str] = None) -> bool:
+    def revoke_capability(self, context_id: int, capability: str, scope: str | None = None) -> bool:
         """Revoke a capability from an execution context."""
         with self.connection() as conn:
             cursor = conn.execute(
@@ -1016,17 +1122,20 @@ class StateDB:
                 WHERE context_id = ? AND capability = ? AND (scope = ? OR (scope IS NULL AND ? IS NULL))
                 AND revoked_at IS NULL
                 """,
-                (context_id, capability, scope, scope)
+                (context_id, capability, scope, scope),
             )
             revoked = cursor.rowcount > 0
         # Log audit after connection closes to avoid nested connection lock
         if revoked:
-            self.log_audit("context_capability", context_id, "revoke",
-                           old_value={"capability": capability, "scope": scope})
+            self.log_audit(
+                "context_capability",
+                context_id,
+                "revoke",
+                old_value={"capability": capability, "scope": scope},
+            )
         return revoked
 
-    def check_capability(self, context_id: int, capability: str,
-                         scope: Optional[str] = None) -> bool:
+    def check_capability(self, context_id: int, capability: str, scope: str | None = None) -> bool:
         """Check if a context has a specific capability."""
         with self.connection() as conn:
             row = conn.execute(
@@ -1038,7 +1147,7 @@ class StateDB:
                 AND revoked_at IS NULL
                 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
                 """,
-                (context_id, capability, scope)
+                (context_id, capability, scope),
             ).fetchone()
             return row is not None
 
@@ -1052,12 +1161,13 @@ class StateDB:
                 AND revoked_at IS NULL
                 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
                 """,
-                (context_id,)
+                (context_id,),
             ).fetchall()
             return [ContextCapability(**dict(row)) for row in rows]
 
-    def log_tool_invocation(self, context_id: Optional[int], tool_name: str,
-                            arguments: Optional[dict] = None) -> int:
+    def log_tool_invocation(
+        self, context_id: int | None, tool_name: str, arguments: dict | None = None
+    ) -> int:
         """Log the start of a tool invocation."""
         with self.connection() as conn:
             cursor = conn.execute(
@@ -1066,13 +1176,18 @@ class StateDB:
                 VALUES (?, ?, ?, 'running')
                 RETURNING id
                 """,
-                (context_id, tool_name, json.dumps(arguments) if arguments else None)
+                (context_id, tool_name, json.dumps(arguments) if arguments else None),
             )
             return cursor.fetchone()[0]
 
-    def complete_tool_invocation(self, invocation_id: int, result: Optional[dict] = None,
-                                 status: str = "completed", duration_ms: Optional[int] = None,
-                                 blocked_reason: Optional[str] = None) -> None:
+    def complete_tool_invocation(
+        self,
+        invocation_id: int,
+        result: dict | None = None,
+        status: str = "completed",
+        duration_ms: int | None = None,
+        blocked_reason: str | None = None,
+    ) -> None:
         """Complete a tool invocation with results."""
         with self.connection() as conn:
             conn.execute(
@@ -1082,17 +1197,27 @@ class StateDB:
                     completed_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                (json.dumps(result) if result else None, status, duration_ms,
-                 blocked_reason, invocation_id)
+                (
+                    json.dumps(result) if result else None,
+                    status,
+                    duration_ms,
+                    blocked_reason,
+                    invocation_id,
+                ),
             )
 
     # =========================================================================
     # TEST REGRESSION OPERATIONS
     # =========================================================================
 
-    def record_test_failure(self, role_name: str, test_name: str,
-                            test_type: TestType, test_run_id: int,
-                            error_message: Optional[str] = None) -> int:
+    def record_test_failure(
+        self,
+        role_name: str,
+        test_name: str,
+        test_type: TestType,
+        test_run_id: int,
+        error_message: str | None = None,
+    ) -> int:
         """Record or update a test regression."""
         role = self.get_role(role_name)
         if not role or not role.id:
@@ -1106,7 +1231,7 @@ class StateDB:
                 FROM test_regressions
                 WHERE role_id = ? AND test_name = ? AND test_type = ?
                 """,
-                (role.id, test_name, test_type.value)
+                (role.id, test_name, test_type.value),
             ).fetchone()
 
             now = datetime.utcnow().isoformat()
@@ -1125,7 +1250,7 @@ class StateDB:
                         last_failure_at = ?, last_error_message = ?, status = ?
                     WHERE id = ?
                     """,
-                    (new_count, new_consecutive, now, error_message, new_status, existing["id"])
+                    (new_count, new_consecutive, now, error_message, new_status, existing["id"]),
                 )
                 regression_id = existing["id"]
             else:
@@ -1138,16 +1263,21 @@ class StateDB:
                     VALUES (?, ?, ?, ?, 1, 1, ?, ?, 'active')
                     RETURNING id
                     """,
-                    (role.id, test_name, test_type.value, test_run_id, now, error_message)
+                    (role.id, test_name, test_type.value, test_run_id, now, error_message),
                 )
                 regression_id = cursor.fetchone()[0]
         # Log audit after connection closes to avoid nested connection lock
-        self.log_audit("test_regression", regression_id, "failure",
-                       new_value={"test_name": test_name, "role": role_name})
+        self.log_audit(
+            "test_regression",
+            regression_id,
+            "failure",
+            new_value={"test_name": test_name, "role": role_name},
+        )
         return regression_id
 
-    def record_test_success(self, role_name: str, test_name: str,
-                            test_type: TestType, test_run_id: int) -> Optional[int]:
+    def record_test_success(
+        self, role_name: str, test_name: str, test_type: TestType, test_run_id: int
+    ) -> int | None:
         """Record a test success, potentially resolving a regression."""
         role = self.get_role(role_name)
         if not role or not role.id:
@@ -1162,7 +1292,7 @@ class StateDB:
                 WHERE role_id = ? AND test_name = ? AND test_type = ?
                 AND status IN ('active', 'flaky')
                 """,
-                (role.id, test_name, test_type.value)
+                (role.id, test_name, test_type.value),
             ).fetchone()
 
             if not existing:
@@ -1178,7 +1308,7 @@ class StateDB:
                     SET status = 'flaky', consecutive_failures = 0
                     WHERE id = ?
                     """,
-                    (existing_id,)
+                    (existing_id,),
                 )
             else:
                 # Multiple consecutive failures then pass = resolved
@@ -1188,27 +1318,31 @@ class StateDB:
                     SET status = 'resolved', resolved_run_id = ?, consecutive_failures = 0
                     WHERE id = ?
                     """,
-                    (test_run_id, existing_id)
+                    (test_run_id, existing_id),
                 )
         # Log audit after connection closes to avoid nested connection lock
-        self.log_audit("test_regression", existing_id, "success",
-                       new_value={"test_name": test_name, "status": "resolved"})
+        self.log_audit(
+            "test_regression",
+            existing_id,
+            "success",
+            new_value={"test_name": test_name, "status": "resolved"},
+        )
         return existing_id
 
-    def get_active_regressions(self, role_name: Optional[str] = None) -> list[ActiveRegressionView]:
+    def get_active_regressions(self, role_name: str | None = None) -> list[ActiveRegressionView]:
         """Get all active test regressions."""
         with self.connection() as conn:
             if role_name:
                 rows = conn.execute(
-                    "SELECT * FROM v_active_regressions WHERE role_name = ?",
-                    (role_name,)
+                    "SELECT * FROM v_active_regressions WHERE role_name = ?", (role_name,)
                 ).fetchall()
             else:
                 rows = conn.execute("SELECT * FROM v_active_regressions").fetchall()
             return [ActiveRegressionView(**dict(row)) for row in rows]
 
-    def get_regression(self, role_name: str, test_name: str,
-                       test_type: TestType) -> Optional[TestRegression]:
+    def get_regression(
+        self, role_name: str, test_name: str, test_type: TestType
+    ) -> TestRegression | None:
         """Get a specific test regression."""
         role = self.get_role(role_name)
         if not role or not role.id:
@@ -1220,7 +1354,7 @@ class StateDB:
                 SELECT * FROM test_regressions
                 WHERE role_id = ? AND test_name = ? AND test_type = ?
                 """,
-                (role.id, test_name, test_type.value)
+                (role.id, test_name, test_type.value),
             ).fetchone()
             if row:
                 data = dict(row)
@@ -1238,17 +1372,19 @@ class StateDB:
                 SET status = 'known_issue', notes = ?
                 WHERE id = ?
                 """,
-                (notes, regression_id)
+                (notes, regression_id),
             )
-            self.log_audit("test_regression", regression_id, "mark_known_issue",
-                           new_value={"notes": notes})
+            self.log_audit(
+                "test_regression", regression_id, "mark_known_issue", new_value={"notes": notes}
+            )
 
     # =========================================================================
     # MERGE TRAIN OPERATIONS
     # =========================================================================
 
-    def add_to_merge_train(self, mr_id: int, position: Optional[int] = None,
-                           target_branch: str = "main") -> int:
+    def add_to_merge_train(
+        self, mr_id: int, position: int | None = None, target_branch: str = "main"
+    ) -> int:
         """Add a merge request to the merge train."""
         with self.connection() as conn:
             cursor = conn.execute(
@@ -1257,17 +1393,25 @@ class StateDB:
                 VALUES (?, ?, ?, 'queued', CURRENT_TIMESTAMP)
                 RETURNING id
                 """,
-                (mr_id, position, target_branch)
+                (mr_id, position, target_branch),
             )
             entry_id = cursor.fetchone()[0]
-            self.log_audit("merge_train", entry_id, "queue",
-                           new_value={"mr_id": mr_id, "target_branch": target_branch})
+            self.log_audit(
+                "merge_train",
+                entry_id,
+                "queue",
+                new_value={"mr_id": mr_id, "target_branch": target_branch},
+            )
             return entry_id
 
-    def update_merge_train_status(self, entry_id: int, status: MergeTrainStatus,
-                                  pipeline_id: Optional[int] = None,
-                                  pipeline_status: Optional[str] = None,
-                                  failure_reason: Optional[str] = None) -> None:
+    def update_merge_train_status(
+        self,
+        entry_id: int,
+        status: MergeTrainStatus,
+        pipeline_id: int | None = None,
+        pipeline_status: str | None = None,
+        failure_reason: str | None = None,
+    ) -> None:
         """Update merge train entry status."""
         with self.connection() as conn:
             now = datetime.utcnow().isoformat()
@@ -1289,17 +1433,20 @@ class StateDB:
             if status == MergeTrainStatus.MERGING:
                 updates.append("started_at = COALESCE(started_at, ?)")
                 params.append(now)
-            elif status in (MergeTrainStatus.MERGED, MergeTrainStatus.FAILED, MergeTrainStatus.CANCELLED):
+            elif status in (
+                MergeTrainStatus.MERGED,
+                MergeTrainStatus.FAILED,
+                MergeTrainStatus.CANCELLED,
+            ):
                 updates.append("completed_at = ?")
                 params.append(now)
 
             params.append(entry_id)
             conn.execute(
-                f"UPDATE merge_train_entries SET {', '.join(updates)} WHERE id = ?",
-                params
+                f"UPDATE merge_train_entries SET {', '.join(updates)} WHERE id = ?", params
             )
 
-    def get_merge_train_entry(self, mr_id: int) -> Optional[MergeTrainEntry]:
+    def get_merge_train_entry(self, mr_id: int) -> MergeTrainEntry | None:
         """Get merge train entry for an MR."""
         with self.connection() as conn:
             row = conn.execute(
@@ -1309,7 +1456,7 @@ class StateDB:
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
-                (mr_id,)
+                (mr_id,),
             ).fetchone()
             if row:
                 data = dict(row)
@@ -1317,8 +1464,9 @@ class StateDB:
                 return MergeTrainEntry(**data)
             return None
 
-    def list_merge_train(self, target_branch: str = "main",
-                         status: Optional[MergeTrainStatus] = None) -> list[MergeTrainEntry]:
+    def list_merge_train(
+        self, target_branch: str = "main", status: MergeTrainStatus | None = None
+    ) -> list[MergeTrainEntry]:
         """List merge train entries."""
         with self.connection() as conn:
             if status:
@@ -1328,7 +1476,7 @@ class StateDB:
                     WHERE target_branch = ? AND status = ?
                     ORDER BY position, queued_at
                     """,
-                    (target_branch, status.value)
+                    (target_branch, status.value),
                 ).fetchall()
             else:
                 rows = conn.execute(
@@ -1337,7 +1485,7 @@ class StateDB:
                     WHERE target_branch = ?
                     ORDER BY position, queued_at
                     """,
-                    (target_branch,)
+                    (target_branch,),
                 ).fetchall()
             result = []
             for row in rows:
@@ -1362,35 +1510,71 @@ class StateDB:
             - 'missing_indexes': List of expected but missing indexes
         """
         expected_tables = {
-            "roles", "role_dependencies", "credentials", "worktrees",
-            "iterations", "issues", "merge_requests", "workflow_definitions",
-            "workflow_executions", "node_executions", "test_runs", "test_cases",
-            "audit_log", "execution_contexts", "context_capabilities",
-            "tool_invocations", "test_regressions", "merge_train_entries"
+            "roles",
+            "role_dependencies",
+            "credentials",
+            "worktrees",
+            "iterations",
+            "issues",
+            "merge_requests",
+            "workflow_definitions",
+            "workflow_executions",
+            "node_executions",
+            "test_runs",
+            "test_cases",
+            "audit_log",
+            "execution_contexts",
+            "context_capabilities",
+            "tool_invocations",
+            "test_regressions",
+            "merge_train_entries",
         }
 
         expected_indexes = {
-            "idx_role_deps_role", "idx_role_deps_depends", "idx_credentials_role",
-            "idx_worktrees_role", "idx_worktrees_status", "idx_issues_role",
-            "idx_issues_iteration", "idx_mrs_role", "idx_workflow_exec_status",
-            "idx_workflow_exec_role", "idx_node_exec_status", "idx_test_runs_role",
-            "idx_test_runs_status", "idx_audit_entity", "idx_exec_ctx_session",
-            "idx_exec_ctx_user", "idx_ctx_caps_context", "idx_ctx_caps_capability",
-            "idx_tool_inv_context", "idx_tool_inv_tool", "idx_tool_inv_status",
-            "idx_regressions_role", "idx_regressions_status", "idx_regressions_test",
-            "idx_merge_train_mr", "idx_merge_train_status"
+            "idx_role_deps_role",
+            "idx_role_deps_depends",
+            "idx_credentials_role",
+            "idx_worktrees_role",
+            "idx_worktrees_status",
+            "idx_issues_role",
+            "idx_issues_iteration",
+            "idx_mrs_role",
+            "idx_workflow_exec_status",
+            "idx_workflow_exec_role",
+            "idx_node_exec_status",
+            "idx_test_runs_role",
+            "idx_test_runs_status",
+            "idx_audit_entity",
+            "idx_exec_ctx_session",
+            "idx_exec_ctx_user",
+            "idx_ctx_caps_context",
+            "idx_ctx_caps_capability",
+            "idx_tool_inv_context",
+            "idx_tool_inv_tool",
+            "idx_tool_inv_status",
+            "idx_regressions_role",
+            "idx_regressions_status",
+            "idx_regressions_test",
+            "idx_merge_train_mr",
+            "idx_merge_train_status",
         }
 
         with self.connection() as conn:
             # Get actual tables
-            tables = set(row["name"] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            ).fetchall())
+            tables = set(
+                row["name"]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                ).fetchall()
+            )
 
             # Get actual indexes
-            indexes = set(row["name"] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'"
-            ).fetchall())
+            indexes = set(
+                row["name"]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'"
+                ).fetchall()
+            )
 
             missing_tables = expected_tables - tables
             extra_tables = tables - expected_tables - {"sqlite_sequence"}
@@ -1402,7 +1586,7 @@ class StateDB:
                 "extra_tables": list(extra_tables),
                 "missing_indexes": list(missing_indexes),
                 "table_count": len(tables),
-                "index_count": len(indexes)
+                "index_count": len(indexes),
             }
 
     def validate_data_integrity(self) -> dict[str, Any]:
@@ -1461,7 +1645,9 @@ class StateDB:
             if orphaned_deps:
                 issues.append({"type": "orphaned_dependencies", "count": len(orphaned_deps)})
             if invalid_worktree_status:
-                issues.append({"type": "invalid_worktree_status", "count": len(invalid_worktree_status)})
+                issues.append(
+                    {"type": "invalid_worktree_status", "count": len(invalid_worktree_status)}
+                )
             if invalid_waves:
                 issues.append({"type": "invalid_waves", "count": len(invalid_waves)})
             if orphaned_executions:
@@ -1471,10 +1657,7 @@ class StateDB:
             if orphaned_tests:
                 issues.append({"type": "orphaned_test_runs", "count": len(orphaned_tests)})
 
-        return {
-            "valid": len(issues) == 0,
-            "issues": issues
-        }
+        return {"valid": len(issues) == 0, "issues": issues}
 
     def get_statistics(self) -> dict[str, Any]:
         """
@@ -1487,11 +1670,23 @@ class StateDB:
             stats = {}
 
             tables = [
-                "roles", "role_dependencies", "credentials", "worktrees",
-                "iterations", "issues", "merge_requests", "workflow_executions",
-                "node_executions", "test_runs", "test_cases", "test_regressions",
-                "audit_log", "execution_contexts", "context_capabilities",
-                "tool_invocations", "merge_train_entries"
+                "roles",
+                "role_dependencies",
+                "credentials",
+                "worktrees",
+                "iterations",
+                "issues",
+                "merge_requests",
+                "workflow_executions",
+                "node_executions",
+                "test_runs",
+                "test_cases",
+                "test_regressions",
+                "audit_log",
+                "execution_contexts",
+                "context_capabilities",
+                "tool_invocations",
+                "merge_train_entries",
             ]
 
             for table in tables:
@@ -1585,13 +1780,20 @@ class StateDB:
             Number of rows deleted
         """
         allowed_tables = {
-            "audit_log", "tool_invocations", "test_runs", "test_cases",
-            "node_executions", "workflow_executions", "test_regressions"
+            "audit_log",
+            "tool_invocations",
+            "test_runs",
+            "test_cases",
+            "node_executions",
+            "workflow_executions",
+            "test_regressions",
         }
 
         if table_name not in allowed_tables:
-            raise ValueError(f"Cannot clear protected table: {table_name}. "
-                           f"Allowed tables: {', '.join(sorted(allowed_tables))}")
+            raise ValueError(
+                f"Cannot clear protected table: {table_name}. "
+                f"Allowed tables: {', '.join(sorted(allowed_tables))}"
+            )
 
         if not confirm:
             return 0
@@ -1639,3 +1841,201 @@ class StateDB:
         shutil.copy2(self.db_path, backup_path)
         self.log_audit("database", 0, "backup", new_value={"backup_path": backup_path})
         return True
+
+    # =========================================================================
+    # TOKEN USAGE / COST TRACKING OPERATIONS
+    # =========================================================================
+
+    def record_token_usage(
+        self,
+        session_id: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+        context: dict | None = None,
+    ) -> int:
+        """
+        Record token usage for cost tracking.
+
+        Args:
+            session_id: Session identifier
+            model: Model used (e.g., "claude-opus-4-5")
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+            cost: Calculated cost in USD
+            context: Optional context metadata
+
+        Returns:
+            ID of the created record
+        """
+        context_json = json.dumps(context) if context else None
+        with self.connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO token_usage (session_id, model, input_tokens, output_tokens, cost, context)
+                VALUES (?, ?, ?, ?, ?, ?)
+                RETURNING id
+                """,
+                (session_id, model, input_tokens, output_tokens, cost, context_json),
+            )
+            return cursor.fetchone()[0]
+
+    def get_session_costs(self, session_id: str) -> dict[str, Any]:
+        """
+        Get cost summary for a specific session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Dict with total_cost, total_input_tokens, total_output_tokens,
+            record_count, and by_model breakdown
+        """
+        with self.connection() as conn:
+            # Get totals
+            row = conn.execute(
+                """
+                SELECT
+                    COALESCE(SUM(cost), 0) as total_cost,
+                    COALESCE(SUM(input_tokens), 0) as total_input_tokens,
+                    COALESCE(SUM(output_tokens), 0) as total_output_tokens,
+                    COUNT(*) as record_count
+                FROM token_usage
+                WHERE session_id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+
+            # Get breakdown by model
+            model_rows = conn.execute(
+                """
+                SELECT model, SUM(cost) as model_cost,
+                       SUM(input_tokens) as input_tokens,
+                       SUM(output_tokens) as output_tokens
+                FROM token_usage
+                WHERE session_id = ?
+                GROUP BY model
+                """,
+                (session_id,),
+            ).fetchall()
+
+        by_model = {
+            r["model"]: {
+                "cost": r["model_cost"],
+                "input_tokens": r["input_tokens"],
+                "output_tokens": r["output_tokens"],
+            }
+            for r in model_rows
+        }
+
+        return {
+            "session_id": session_id,
+            "total_cost": row["total_cost"],
+            "total_input_tokens": row["total_input_tokens"],
+            "total_output_tokens": row["total_output_tokens"],
+            "record_count": row["record_count"],
+            "by_model": by_model,
+        }
+
+    def get_cost_summary(
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Get cost summary over a date range.
+
+        Args:
+            start_date: Start date (ISO format, inclusive)
+            end_date: End date (ISO format, inclusive)
+
+        Returns:
+            Dict with totals, by_model breakdown, and by_session breakdown
+        """
+        with self.connection() as conn:
+            # Build query with optional date filters
+            query = """
+                SELECT
+                    COALESCE(SUM(cost), 0) as total_cost,
+                    COALESCE(SUM(input_tokens), 0) as total_input_tokens,
+                    COALESCE(SUM(output_tokens), 0) as total_output_tokens,
+                    COUNT(*) as record_count
+                FROM token_usage
+                WHERE 1=1
+            """
+            params: list[Any] = []
+
+            if start_date:
+                query += " AND timestamp >= ?"
+                params.append(start_date)
+            if end_date:
+                query += " AND timestamp <= ?"
+                params.append(end_date)
+
+            row = conn.execute(query, params).fetchone()
+
+            # Get breakdown by model
+            model_query = """
+                SELECT model, SUM(cost) as model_cost,
+                       SUM(input_tokens) as input_tokens,
+                       SUM(output_tokens) as output_tokens,
+                       COUNT(*) as count
+                FROM token_usage
+                WHERE 1=1
+            """
+            if start_date:
+                model_query += " AND timestamp >= ?"
+            if end_date:
+                model_query += " AND timestamp <= ?"
+            model_query += " GROUP BY model ORDER BY model_cost DESC"
+
+            model_rows = conn.execute(model_query, params).fetchall()
+
+            # Get breakdown by session (top 20)
+            session_query = """
+                SELECT session_id, SUM(cost) as session_cost,
+                       SUM(input_tokens) as input_tokens,
+                       SUM(output_tokens) as output_tokens,
+                       COUNT(*) as count
+                FROM token_usage
+                WHERE 1=1
+            """
+            if start_date:
+                session_query += " AND timestamp >= ?"
+            if end_date:
+                session_query += " AND timestamp <= ?"
+            session_query += " GROUP BY session_id ORDER BY session_cost DESC LIMIT 20"
+
+            session_rows = conn.execute(session_query, params).fetchall()
+
+        by_model = {
+            r["model"]: {
+                "cost": r["model_cost"],
+                "input_tokens": r["input_tokens"],
+                "output_tokens": r["output_tokens"],
+                "count": r["count"],
+            }
+            for r in model_rows
+        }
+
+        by_session = {
+            r["session_id"]: {
+                "cost": r["session_cost"],
+                "input_tokens": r["input_tokens"],
+                "output_tokens": r["output_tokens"],
+                "count": r["count"],
+            }
+            for r in session_rows
+        }
+
+        return {
+            "total_cost": row["total_cost"],
+            "total_input_tokens": row["total_input_tokens"],
+            "total_output_tokens": row["total_output_tokens"],
+            "record_count": row["record_count"],
+            "by_model": by_model,
+            "by_session": by_session,
+            "start_date": start_date,
+            "end_date": end_date,
+        }

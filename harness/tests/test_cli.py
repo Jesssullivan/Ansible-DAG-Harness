@@ -1,12 +1,13 @@
 """Tests for CLI commands."""
 
 import json
+
 import pytest
 from typer.testing import CliRunner
-from harness.cli import app
-from harness.db.state import StateDB
-from harness.db.models import Role
 
+from harness.cli import app
+from harness.db.models import Role
+from harness.db.state import StateDB
 
 runner = CliRunner()
 
@@ -126,7 +127,9 @@ class TestMetricsCommands:
         """Record a metric value."""
         db, env = cli_env
 
-        result = runner.invoke(app, ["metrics", "record", "workflow_completion_time", "100.0"], env=env)
+        result = runner.invoke(
+            app, ["metrics", "record", "workflow_completion_time", "100.0"], env=env
+        )
         assert result.exit_code == 0
         assert "workflow_completion_time" in result.stdout
 
@@ -153,6 +156,7 @@ class TestMetricsCommands:
         """History with recorded data."""
         db, env = cli_env
         from harness.metrics.golden import GoldenMetricsTracker
+
         tracker = GoldenMetricsTracker(db)
         tracker.record("workflow_completion_time", 100.0)
 

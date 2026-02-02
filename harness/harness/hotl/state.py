@@ -1,13 +1,15 @@
 """State definitions for HOTL mode."""
 
-from enum import Enum
-from typing import Annotated, Optional, Any
-from typing_extensions import TypedDict
 import operator
+from enum import Enum
+from typing import Annotated, Any
+
+from typing_extensions import TypedDict
 
 
 class HOTLPhase(str, Enum):
     """Current phase of HOTL execution."""
+
     IDLE = "idle"
     RESEARCHING = "researching"
     PLANNING = "planning"
@@ -27,11 +29,12 @@ class HOTLState(TypedDict, total=False):
     Uses Annotated types with operator.add for list accumulation
     following LangGraph reducer patterns.
     """
+
     # Current phase
     phase: HOTLPhase
 
     # Task tracking
-    current_task_id: Optional[int]
+    current_task_id: int | None
     pending_tasks: list[int]
     completed_tasks: Annotated[list[int], operator.add]
     failed_tasks: Annotated[list[int], operator.add]
@@ -42,8 +45,8 @@ class HOTLState(TypedDict, total=False):
     codebase_insights: Annotated[list[str], operator.add]
 
     # Planning context
-    current_plan: Optional[str]
-    plan_file_path: Optional[str]
+    current_plan: str | None
+    plan_file_path: str | None
     plan_gaps: list[str]
     plan_revision: int
 
@@ -76,7 +79,7 @@ class HOTLState(TypedDict, total=False):
 def create_initial_state(
     max_iterations: int = 100,
     notification_interval: int = 300,  # 5 minutes
-    config: Optional[dict] = None
+    config: dict | None = None,
 ) -> HOTLState:
     """Create initial HOTL state with defaults."""
     import time

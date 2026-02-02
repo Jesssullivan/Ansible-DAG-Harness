@@ -1,16 +1,21 @@
 """Tests for StateDB CRUD operations."""
 
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
-from harness.db.state import StateDB
+from hypothesis import given, settings
+
 from harness.db.models import (
-    Role, RoleDependency, DependencyType, Credential,
-    Worktree, WorktreeStatus, TestRun, TestType, TestStatus,
-    ExecutionContext
+    Credential,
+    Role,
+    TestRun,
+    TestStatus,
+    TestType,
+    Worktree,
+    WorktreeStatus,
 )
+from harness.db.state import StateDB
 from tests.strategies import (
-    role_strategy, credential_strategy, worktree_strategy,
-    wave_strategy, role_name_strategy
+    role_strategy,
+    wave_strategy,
 )
 
 
@@ -95,7 +100,7 @@ class TestRoleOperations:
         """Property: upsert then get should return equivalent role."""
         # Create fresh db for each hypothesis example
         db = StateDB(":memory:")
-        role_id = db.upsert_role(role)
+        db.upsert_role(role)
         retrieved = db.get_role(role.name)
 
         assert retrieved is not None
@@ -111,7 +116,7 @@ class TestRoleOperations:
         # Create fresh db for each hypothesis example
         db = StateDB(":memory:")
         role = Role(name=f"role_wave_{wave}", wave=wave)
-        role_id = db.upsert_role(role)
+        db.upsert_role(role)
         retrieved = db.get_role(role.name)
         assert retrieved.wave == wave
 
@@ -124,10 +129,7 @@ class TestCredentialOperations:
         """Add and retrieve credentials for a role."""
         role = db_with_roles.get_role("common")
         cred = Credential(
-            role_id=role.id,
-            entry_name="ansible-self",
-            purpose="WinRM auth",
-            is_base58=True
+            role_id=role.id, entry_name="ansible-self", purpose="WinRM auth", is_base58=True
         )
         db_with_roles.add_credential(cred)
 
@@ -162,18 +164,12 @@ class TestCredentialOperations:
         """Credential upsert updates existing."""
         role = db_with_roles.get_role("common")
         cred1 = Credential(
-            role_id=role.id,
-            entry_name="test-cred",
-            purpose="Initial purpose",
-            is_base58=False
+            role_id=role.id, entry_name="test-cred", purpose="Initial purpose", is_base58=False
         )
         db_with_roles.add_credential(cred1)
 
         cred2 = Credential(
-            role_id=role.id,
-            entry_name="test-cred",
-            purpose="Updated purpose",
-            is_base58=True
+            role_id=role.id, entry_name="test-cred", purpose="Updated purpose", is_base58=True
         )
         db_with_roles.add_credential(cred2)
 
@@ -194,7 +190,7 @@ class TestWorktreeOperations:
             role_id=role.id,
             path="../.worktrees/sid-common",
             branch="sid/common",
-            status=WorktreeStatus.ACTIVE
+            status=WorktreeStatus.ACTIVE,
         )
         db_with_roles.upsert_worktree(worktree)
 
@@ -271,7 +267,7 @@ class TestExecutionContextOperations:
         context_id = db.create_context(
             session_id="test-session-123",
             user_id="jsullivan2",
-            capabilities=["read:roles", "read:worktrees"]
+            capabilities=["read:roles", "read:worktrees"],
         )
 
         assert context_id > 0
@@ -335,9 +331,7 @@ class TestToolInvocationTracking:
         """Log a tool invocation."""
         context_id = db.create_context(session_id="test-session")
         invocation_id = db.log_tool_invocation(
-            context_id=context_id,
-            tool_name="list_roles",
-            arguments={"wave": 2}
+            context_id=context_id, tool_name="list_roles", arguments={"wave": 2}
         )
 
         assert invocation_id > 0
@@ -346,16 +340,13 @@ class TestToolInvocationTracking:
     def test_complete_tool_invocation(self, db: StateDB):
         """Complete a tool invocation."""
         context_id = db.create_context(session_id="test-session")
-        invocation_id = db.log_tool_invocation(
-            context_id=context_id,
-            tool_name="list_roles"
-        )
+        invocation_id = db.log_tool_invocation(context_id=context_id, tool_name="list_roles")
 
         db.complete_tool_invocation(
             invocation_id,
             result={"roles": ["common", "sql_server_2022"]},
             status="completed",
-            duration_ms=150
+            duration_ms=150,
         )
 
         # Verify completion (would need a get_invocation method to fully test)
@@ -371,7 +362,7 @@ class TestAuditLogging:
             entity_type="role",
             entity_id=1,
             action="create",
-            new_value={"name": "test_role", "wave": 1}
+            new_value={"name": "test_role", "wave": 1},
         )
 
         # Verify audit was logged (would need a get_audit_log method)
@@ -385,7 +376,7 @@ class TestAuditLogging:
             action="update",
             old_value={"wave": 1},
             new_value={"wave": 2},
-            actor="test_user"
+            actor="test_user",
         )
 
 
@@ -397,11 +388,7 @@ class TestTestRegressionTracking:
         """Record a test failure creates regression."""
         # Create a test run first
         role = db_with_roles.get_role("common")
-        test_run = TestRun(
-            role_id=role.id,
-            test_type=TestType.MOLECULE,
-            status=TestStatus.FAILED
-        )
+        test_run = TestRun(role_id=role.id, test_type=TestType.MOLECULE, status=TestStatus.FAILED)
         run_id = db_with_roles.create_test_run(test_run)
 
         # Record failure
@@ -410,7 +397,7 @@ class TestTestRegressionTracking:
             test_name="molecule:common",
             test_type=TestType.MOLECULE,
             test_run_id=run_id,
-            error_message="Test failed"
+            error_message="Test failed",
         )
 
         assert regression_id > 0
@@ -421,11 +408,7 @@ class TestTestRegressionTracking:
         role = db_with_roles.get_role("common")
 
         # Create failed run
-        failed_run = TestRun(
-            role_id=role.id,
-            test_type=TestType.MOLECULE,
-            status=TestStatus.FAILED
-        )
+        failed_run = TestRun(role_id=role.id, test_type=TestType.MOLECULE, status=TestStatus.FAILED)
         failed_run_id = db_with_roles.create_test_run(failed_run)
 
         # Record multiple failures
@@ -434,30 +417,24 @@ class TestTestRegressionTracking:
                 role_name="common",
                 test_name="molecule:common",
                 test_type=TestType.MOLECULE,
-                test_run_id=failed_run_id
+                test_run_id=failed_run_id,
             )
 
         # Create passing run
-        passed_run = TestRun(
-            role_id=role.id,
-            test_type=TestType.MOLECULE,
-            status=TestStatus.PASSED
-        )
+        passed_run = TestRun(role_id=role.id, test_type=TestType.MOLECULE, status=TestStatus.PASSED)
         passed_run_id = db_with_roles.create_test_run(passed_run)
 
         # Record success
-        resolved_id = db_with_roles.record_test_success(
+        db_with_roles.record_test_success(
             role_name="common",
             test_name="molecule:common",
             test_type=TestType.MOLECULE,
-            test_run_id=passed_run_id
+            test_run_id=passed_run_id,
         )
 
         # Regression should be resolved
         regression = db_with_roles.get_regression(
-            role_name="common",
-            test_name="molecule:common",
-            test_type=TestType.MOLECULE
+            role_name="common", test_name="molecule:common", test_type=TestType.MOLECULE
         )
         assert regression.status.value == "resolved"
 
@@ -465,18 +442,14 @@ class TestTestRegressionTracking:
     def test_get_active_regressions(self, db_with_roles: StateDB):
         """Get active regressions."""
         role = db_with_roles.get_role("common")
-        test_run = TestRun(
-            role_id=role.id,
-            test_type=TestType.MOLECULE,
-            status=TestStatus.FAILED
-        )
+        test_run = TestRun(role_id=role.id, test_type=TestType.MOLECULE, status=TestStatus.FAILED)
         run_id = db_with_roles.create_test_run(test_run)
 
         db_with_roles.record_test_failure(
             role_name="common",
             test_name="molecule:common",
             test_type=TestType.MOLECULE,
-            test_run_id=run_id
+            test_run_id=run_id,
         )
 
         regressions = db_with_roles.get_active_regressions()

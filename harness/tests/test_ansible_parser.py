@@ -188,8 +188,7 @@ galaxy_info:
         role_info = parser.parse_role(temp_role_dir)
         assert len(role_info.credentials) >= 1
         keepass_cred = next(
-            (c for c in role_info.credentials if c.pattern_matched == "keepassxc_password"),
-            None
+            (c for c in role_info.credentials if c.pattern_matched == "keepassxc_password"), None
         )
         assert keepass_cred is not None
         assert keepass_cred.attribute == "username"
@@ -371,9 +370,7 @@ class TestAnsibleRoleParserWithDatabase:
         parser_with_db.populate_database(roles_dir)
 
         # Add credential dependency
-        result = parser_with_db.add_credential_dependency(
-            "role_b", "role_a", "shared_secret"
-        )
+        result = parser_with_db.add_credential_dependency("role_b", "role_a", "shared_secret")
         assert result is True
 
     def test_no_database_raises_error(self):

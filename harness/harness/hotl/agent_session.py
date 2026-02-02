@@ -12,23 +12,25 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class AgentStatus(str, Enum):
     """Status of a Claude Code agent session."""
-    PENDING = "pending"        # Created but not yet started
-    RUNNING = "running"        # Actively executing
-    COMPLETED = "completed"    # Successfully finished
-    FAILED = "failed"          # Terminated with error
+
+    PENDING = "pending"  # Created but not yet started
+    RUNNING = "running"  # Actively executing
+    COMPLETED = "completed"  # Successfully finished
+    FAILED = "failed"  # Terminated with error
     NEEDS_HUMAN = "needs_human"  # Agent requested human intervention
-    CANCELLED = "cancelled"    # Externally terminated
+    CANCELLED = "cancelled"  # Externally terminated
 
 
 class FileChangeType(str, Enum):
     """Type of file change made by an agent."""
+
     CREATE = "create"
     MODIFY = "modify"
     DELETE = "delete"
@@ -38,10 +40,11 @@ class FileChangeType(str, Enum):
 @dataclass
 class FileChange:
     """Record of a file change made by an agent."""
+
     file_path: str
     change_type: FileChangeType
-    diff: Optional[str] = None
-    old_path: Optional[str] = None  # For renames
+    diff: str | None = None
+    old_path: str | None = None  # For renames
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -62,7 +65,9 @@ class FileChange:
             change_type=FileChangeType(data["change_type"]),
             diff=data.get("diff"),
             old_path=data.get("old_path"),
-            timestamp=datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else datetime.utcnow(),
+            timestamp=datetime.fromisoformat(data["timestamp"])
+            if data.get("timestamp")
+            else datetime.utcnow(),
         )
 
 
@@ -73,25 +78,34 @@ class AgentSession:
 
     Tracks the lifecycle, output, and file changes of a spawned agent.
     """
+
     id: str
     task: str
     working_dir: Path
     status: AgentStatus = AgentStatus.PENDING
     context: dict[str, Any] = field(default_factory=dict)
     output: str = ""
-    error_message: Optional[str] = None
+    error_message: str | None = None
     file_changes: list[FileChange] = field(default_factory=list)
     progress_updates: list[str] = field(default_factory=list)
-    intervention_reason: Optional[str] = None
+    intervention_reason: str | None = None
 
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     # Process tracking
-    pid: Optional[int] = None
-    execution_id: Optional[int] = None  # Link to workflow execution
+    pid: int | None = None
+    execution_id: int | None = None  # Link to workflow execution
+
+    # SDK session tracking (for session resumption)
+    sdk_session_id: str | None = None  # Claude Agent SDK session ID
+
+    # Token tracking for context management
+    input_tokens: int = 0
+    output_tokens: int = 0
+    context_tokens: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -111,6 +125,10 @@ class AgentSession:
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "pid": self.pid,
             "execution_id": self.execution_id,
+            "sdk_session_id": self.sdk_session_id,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "context_tokens": self.context_tokens,
         }
 
     @classmethod
@@ -128,6 +146,10 @@ class AgentSession:
             intervention_reason=data.get("intervention_reason"),
             pid=data.get("pid"),
             execution_id=data.get("execution_id"),
+            sdk_session_id=data.get("sdk_session_id"),
+            input_tokens=data.get("input_tokens", 0),
+            output_tokens=data.get("output_tokens", 0),
+            context_tokens=data.get("context_tokens", 0),
         )
 
         if data.get("created_at"):
@@ -142,7 +164,7 @@ class AgentSession:
 
         return session
 
-    def mark_started(self, pid: Optional[int] = None) -> None:
+    def mark_started(self, pid: int | None = None) -> None:
         """Mark the session as started."""
         self.status = AgentStatus.RUNNING
         self.started_at = datetime.utcnow()
@@ -175,12 +197,28 @@ class AgentSession:
         self.progress_updates.append(f"[{datetime.utcnow().isoformat()}] {update}")
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Get session duration in seconds."""
         if not self.started_at:
             return None
         end = self.completed_at or datetime.utcnow()
         return (end - self.started_at).total_seconds()
+
+    def update_token_count(self, input_t: int, output_t: int) -> None:
+        """Update token counts after an API call.
+
+        Args:
+            input_t: Input tokens used in this call.
+            output_t: Output tokens generated in this call.
+        """
+        self.input_tokens += input_t
+        self.output_tokens += output_t
+        self.context_tokens = self.input_tokens  # Approximate context as cumulative input
+
+    @property
+    def total_tokens(self) -> int:
+        """Get total tokens used (input + output)."""
+        return self.input_tokens + self.output_tokens
 
 
 class AgentSessionManager:
@@ -190,7 +228,7 @@ class AgentSessionManager:
     Thread-safe session tracking with persistence support.
     """
 
-    def __init__(self, db: Optional[Any] = None):
+    def __init__(self, db: Any | None = None):
         """
         Initialize the session manager.
 
@@ -205,8 +243,8 @@ class AgentSessionManager:
         self,
         task: str,
         working_dir: Path,
-        context: Optional[dict[str, Any]] = None,
-        execution_id: Optional[int] = None,
+        context: dict[str, Any] | None = None,
+        execution_id: int | None = None,
     ) -> AgentSession:
         """
         Create a new agent session.
@@ -239,7 +277,7 @@ class AgentSessionManager:
         logger.info(f"Created agent session {session_id}: {task[:50]}...")
         return session
 
-    def get_session(self, session_id: str) -> Optional[AgentSession]:
+    def get_session(self, session_id: str) -> AgentSession | None:
         """
         Get a session by ID.
 
@@ -279,8 +317,8 @@ class AgentSessionManager:
 
     def list_sessions(
         self,
-        status: Optional[AgentStatus] = None,
-        execution_id: Optional[int] = None,
+        status: AgentStatus | None = None,
+        execution_id: int | None = None,
         limit: int = 100,
     ) -> list[AgentSession]:
         """
@@ -346,7 +384,11 @@ class AgentSessionManager:
         with self._lock:
             to_remove = []
             for session_id, session in self._sessions.items():
-                if session.status in (AgentStatus.COMPLETED, AgentStatus.FAILED, AgentStatus.CANCELLED):
+                if session.status in (
+                    AgentStatus.COMPLETED,
+                    AgentStatus.FAILED,
+                    AgentStatus.CANCELLED,
+                ):
                     age_hours = (cutoff - session.created_at).total_seconds() / 3600
                     if age_hours > max_age_hours:
                         to_remove.append(session_id)
@@ -401,7 +443,7 @@ class AgentSessionManager:
                         session.completed_at.isoformat() if session.completed_at else None,
                         str(session.working_dir),
                         session.pid,
-                    )
+                    ),
                 )
 
                 # Persist file changes
@@ -421,12 +463,12 @@ class AgentSessionManager:
                             fc.diff,
                             fc.old_path,
                             fc.timestamp.isoformat(),
-                        )
+                        ),
                     )
         except Exception as e:
             logger.error(f"Failed to persist session {session.id}: {e}")
 
-    def _load_session(self, session_id: str) -> Optional[AgentSession]:
+    def _load_session(self, session_id: str) -> AgentSession | None:
         """Load session from database."""
         if not self.db:
             return None
@@ -434,8 +476,7 @@ class AgentSessionManager:
         try:
             with self.db.connection() as conn:
                 row = conn.execute(
-                    "SELECT * FROM agent_sessions WHERE id = ?",
-                    (session_id,)
+                    "SELECT * FROM agent_sessions WHERE id = ?", (session_id,)
                 ).fetchone()
 
                 if not row:
@@ -443,8 +484,7 @@ class AgentSessionManager:
 
                 # Load file changes
                 fc_rows = conn.execute(
-                    "SELECT * FROM agent_file_changes WHERE session_id = ?",
-                    (session_id,)
+                    "SELECT * FROM agent_file_changes WHERE session_id = ?", (session_id,)
                 ).fetchall()
 
                 session = AgentSession(
@@ -456,7 +496,9 @@ class AgentSessionManager:
                     error_message=row["error_message"],
                     intervention_reason=row["intervention_reason"],
                     context=json.loads(row["context_json"]) if row["context_json"] else {},
-                    progress_updates=json.loads(row["progress_json"]) if row["progress_json"] else [],
+                    progress_updates=json.loads(row["progress_json"])
+                    if row["progress_json"]
+                    else [],
                     execution_id=row["execution_id"],
                     pid=row["pid"],
                 )
@@ -469,13 +511,17 @@ class AgentSessionManager:
                     session.completed_at = datetime.fromisoformat(row["completed_at"])
 
                 for fc_row in fc_rows:
-                    session.file_changes.append(FileChange(
-                        file_path=fc_row["file_path"],
-                        change_type=FileChangeType(fc_row["change_type"]),
-                        diff=fc_row["diff"],
-                        old_path=fc_row["old_path"],
-                        timestamp=datetime.fromisoformat(fc_row["created_at"]) if fc_row["created_at"] else datetime.utcnow(),
-                    ))
+                    session.file_changes.append(
+                        FileChange(
+                            file_path=fc_row["file_path"],
+                            change_type=FileChangeType(fc_row["change_type"]),
+                            diff=fc_row["diff"],
+                            old_path=fc_row["old_path"],
+                            timestamp=datetime.fromisoformat(fc_row["created_at"])
+                            if fc_row["created_at"]
+                            else datetime.utcnow(),
+                        )
+                    )
 
                 return session
 
@@ -496,8 +542,7 @@ class AgentSessionManager:
 
         completed = [s for s in sessions if s.duration_seconds is not None]
         avg_duration = (
-            sum(s.duration_seconds for s in completed) / len(completed)
-            if completed else 0.0
+            sum(s.duration_seconds for s in completed) / len(completed) if completed else 0.0
         )
 
         return {

@@ -10,15 +10,14 @@ This module runs self-tests after bootstrap to verify:
 
 import os
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 
 class TestStatus(Enum):
     """Status of a self-test."""
+
     PASS = "pass"
     FAIL = "fail"
     SKIP = "skip"
@@ -28,16 +27,18 @@ class TestStatus(Enum):
 @dataclass
 class TestResult:
     """Result of a single self-test."""
+
     name: str
     status: TestStatus
     message: str
-    details: Optional[str] = None
-    duration_ms: Optional[float] = None
+    details: str | None = None
+    duration_ms: float | None = None
 
 
 @dataclass
 class SelfTestResult:
     """Result of all self-tests."""
+
     all_passed: bool
     tests: list[TestResult] = field(default_factory=list)
 
@@ -60,7 +61,7 @@ class SelfTester:
     Tests verify that all components are properly installed and functional.
     """
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         """Initialize self-tester.
 
         Args:
@@ -100,8 +101,7 @@ class SelfTester:
             tests.append(self._test_gitlab_auth())
 
         all_passed = all(
-            t.status in (TestStatus.PASS, TestStatus.SKIP, TestStatus.WARN)
-            for t in tests
+            t.status in (TestStatus.PASS, TestStatus.SKIP, TestStatus.WARN) for t in tests
         )
 
         return SelfTestResult(all_passed=all_passed, tests=tests)
@@ -109,15 +109,13 @@ class SelfTester:
     def _test_database_connection(self) -> TestResult:
         """Test database can be opened."""
         import time
+
         start = time.time()
 
         try:
             from harness.db.state import StateDB
 
-            db_path = os.environ.get(
-                "HARNESS_DB_PATH",
-                str(self.harness_dir / "harness.db")
-            )
+            db_path = os.environ.get("HARNESS_DB_PATH", str(self.harness_dir / "harness.db"))
 
             db = StateDB(db_path)
             # Quick query to verify connection
@@ -130,7 +128,7 @@ class SelfTester:
                 status=TestStatus.PASS,
                 message="Database connection successful",
                 details=f"Path: {db_path}",
-                duration_ms=duration
+                duration_ms=duration,
             )
 
         except Exception as e:
@@ -140,21 +138,19 @@ class SelfTester:
                 status=TestStatus.FAIL,
                 message="Database connection failed",
                 details=str(e),
-                duration_ms=duration
+                duration_ms=duration,
             )
 
     def _test_database_schema(self) -> TestResult:
         """Test database schema is valid."""
         import time
+
         start = time.time()
 
         try:
             from harness.db.state import StateDB
 
-            db_path = os.environ.get(
-                "HARNESS_DB_PATH",
-                str(self.harness_dir / "harness.db")
-            )
+            db_path = os.environ.get("HARNESS_DB_PATH", str(self.harness_dir / "harness.db"))
 
             db = StateDB(db_path)
             result = db.validate_schema()
@@ -167,7 +163,7 @@ class SelfTester:
                     status=TestStatus.PASS,
                     message="Database schema is valid",
                     details=f"Tables: {result.get('table_count', 0)}, Indexes: {result.get('index_count', 0)}",
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
             else:
                 return TestResult(
@@ -175,7 +171,7 @@ class SelfTester:
                     status=TestStatus.WARN,
                     message="Database schema has issues",
                     details=str(result.get("missing_tables", [])),
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
 
         except Exception as e:
@@ -185,21 +181,17 @@ class SelfTester:
                 status=TestStatus.FAIL,
                 message="Schema validation failed",
                 details=str(e),
-                duration_ms=duration
+                duration_ms=duration,
             )
 
     def _test_git_available(self) -> TestResult:
         """Test git is available."""
         import time
+
         start = time.time()
 
         try:
-            result = subprocess.run(
-                ["git", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            result = subprocess.run(["git", "--version"], capture_output=True, text=True, timeout=5)
 
             duration = (time.time() - start) * 1000
 
@@ -210,7 +202,7 @@ class SelfTester:
                     status=TestStatus.PASS,
                     message="Git is available",
                     details=version,
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
             else:
                 return TestResult(
@@ -218,7 +210,7 @@ class SelfTester:
                     status=TestStatus.FAIL,
                     message="Git command failed",
                     details=result.stderr,
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
 
         except FileNotFoundError:
@@ -226,19 +218,20 @@ class SelfTester:
                 name="git_available",
                 status=TestStatus.FAIL,
                 message="Git not found",
-                details="git command not in PATH"
+                details="git command not in PATH",
             )
         except Exception as e:
             return TestResult(
                 name="git_available",
                 status=TestStatus.FAIL,
                 message="Git check failed",
-                details=str(e)
+                details=str(e),
             )
 
     def _test_git_worktree_support(self) -> TestResult:
         """Test git worktree support."""
         import time
+
         start = time.time()
 
         try:
@@ -247,19 +240,19 @@ class SelfTester:
                 capture_output=True,
                 text=True,
                 timeout=5,
-                cwd=str(self.project_root)
+                cwd=str(self.project_root),
             )
 
             duration = (time.time() - start) * 1000
 
             if result.returncode == 0:
-                lines = [l for l in result.stdout.strip().split("\n") if l]
+                lines = [line for line in result.stdout.strip().split("\n") if line]
                 return TestResult(
                     name="git_worktree",
                     status=TestStatus.PASS,
                     message="Git worktree support available",
                     details=f"{len(lines)} worktree(s) found",
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
             else:
                 return TestResult(
@@ -267,7 +260,7 @@ class SelfTester:
                     status=TestStatus.WARN,
                     message="Git worktree command failed",
                     details=result.stderr,
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
 
         except Exception as e:
@@ -275,12 +268,13 @@ class SelfTester:
                 name="git_worktree",
                 status=TestStatus.WARN,
                 message="Git worktree check failed",
-                details=str(e)
+                details=str(e),
             )
 
     def _test_hooks_executable(self) -> TestResult:
         """Test hook scripts are executable."""
         import time
+
         start = time.time()
 
         hooks_dir = self.project_root / ".claude" / "hooks"
@@ -290,7 +284,7 @@ class SelfTester:
                 name="hooks_executable",
                 status=TestStatus.SKIP,
                 message="Hooks directory not found",
-                details=str(hooks_dir)
+                details=str(hooks_dir),
             )
 
         issues = []
@@ -310,20 +304,21 @@ class SelfTester:
                 status=TestStatus.WARN,
                 message=f"{len(issues)} hook(s) not executable",
                 details="; ".join(issues),
-                duration_ms=duration
+                duration_ms=duration,
             )
         else:
             return TestResult(
                 name="hooks_executable",
                 status=TestStatus.PASS,
                 message=f"All {checked} hooks are executable",
-                duration_ms=duration
+                duration_ms=duration,
             )
 
     def _test_settings_valid(self) -> TestResult:
         """Test settings.json is valid JSON."""
-        import time
         import json
+        import time
+
         start = time.time()
 
         settings_path = self.project_root / ".claude" / "settings.json"
@@ -333,7 +328,7 @@ class SelfTester:
                 name="settings_valid",
                 status=TestStatus.SKIP,
                 message="settings.json not found",
-                details=str(settings_path)
+                details=str(settings_path),
             )
 
         try:
@@ -350,7 +345,7 @@ class SelfTester:
                     name="settings_valid",
                     status=TestStatus.PASS,
                     message="settings.json is valid with MCP config",
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
             else:
                 return TestResult(
@@ -358,7 +353,7 @@ class SelfTester:
                     status=TestStatus.WARN,
                     message="settings.json valid but missing MCP config",
                     details="dag-harness MCP server not configured",
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
 
         except json.JSONDecodeError as e:
@@ -368,13 +363,14 @@ class SelfTester:
                 status=TestStatus.FAIL,
                 message="settings.json is invalid JSON",
                 details=str(e),
-                duration_ms=duration
+                duration_ms=duration,
             )
 
     def _test_mcp_importable(self) -> TestResult:
         """Test MCP server module can be imported."""
-        import time
         import importlib
+        import time
+
         start = time.time()
 
         try:
@@ -389,7 +385,7 @@ class SelfTester:
                     name="mcp_importable",
                     status=TestStatus.FAIL,
                     message="MCP server missing create_mcp_server",
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
 
             duration = (time.time() - start) * 1000
@@ -397,7 +393,7 @@ class SelfTester:
                 name="mcp_importable",
                 status=TestStatus.PASS,
                 message="MCP server module importable",
-                duration_ms=duration
+                duration_ms=duration,
             )
 
         except ImportError as e:
@@ -407,7 +403,7 @@ class SelfTester:
                 status=TestStatus.FAIL,
                 message="MCP server import failed",
                 details=str(e),
-                duration_ms=duration
+                duration_ms=duration,
             )
         except Exception as e:
             duration = (time.time() - start) * 1000
@@ -416,12 +412,13 @@ class SelfTester:
                 status=TestStatus.WARN,
                 message="MCP server import issue",
                 details=str(e),
-                duration_ms=duration
+                duration_ms=duration,
             )
 
     def _test_gitlab_auth(self) -> TestResult:
         """Test GitLab authentication."""
         import time
+
         start = time.time()
 
         gitlab_token = os.environ.get("GITLAB_TOKEN") or os.environ.get("GL_TOKEN")
@@ -431,17 +428,16 @@ class SelfTester:
                 name="gitlab_auth",
                 status=TestStatus.SKIP,
                 message="GITLAB_TOKEN not set",
-                details="Skipping GitLab auth test"
+                details="Skipping GitLab auth test",
             )
 
         try:
-            import urllib.request
             import urllib.error
+            import urllib.request
 
             gitlab_url = os.environ.get("GITLAB_URL", "https://gitlab.com")
             req = urllib.request.Request(
-                f"{gitlab_url}/api/v4/user",
-                headers={"PRIVATE-TOKEN": gitlab_token}
+                f"{gitlab_url}/api/v4/user", headers={"PRIVATE-TOKEN": gitlab_token}
             )
 
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -449,6 +445,7 @@ class SelfTester:
 
                 if response.status == 200:
                     import json
+
                     data = json.loads(response.read().decode())
                     username = data.get("username", "unknown")
                     return TestResult(
@@ -456,7 +453,7 @@ class SelfTester:
                         status=TestStatus.PASS,
                         message="GitLab authentication successful",
                         details=f"Authenticated as @{username}",
-                        duration_ms=duration
+                        duration_ms=duration,
                     )
 
         except urllib.error.HTTPError as e:
@@ -467,14 +464,14 @@ class SelfTester:
                     status=TestStatus.FAIL,
                     message="GitLab authentication failed",
                     details="Invalid token (401 Unauthorized)",
-                    duration_ms=duration
+                    duration_ms=duration,
                 )
             return TestResult(
                 name="gitlab_auth",
                 status=TestStatus.WARN,
                 message="GitLab API error",
                 details=f"HTTP {e.code}",
-                duration_ms=duration
+                duration_ms=duration,
             )
         except Exception as e:
             duration = (time.time() - start) * 1000
@@ -483,11 +480,9 @@ class SelfTester:
                 status=TestStatus.WARN,
                 message="GitLab auth check failed",
                 details=str(e),
-                duration_ms=duration
+                duration_ms=duration,
             )
 
         return TestResult(
-            name="gitlab_auth",
-            status=TestStatus.WARN,
-            message="GitLab auth check inconclusive"
+            name="gitlab_auth", status=TestStatus.WARN, message="GitLab auth check inconclusive"
         )

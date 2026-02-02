@@ -529,3 +529,52 @@ BEGIN
 END;
 
 -- Note: agent_sessions doesn't have updated_at since we track started_at and completed_at separately
+
+-- ============================================================================
+-- TOKEN USAGE / COST TRACKING
+-- ============================================================================
+
+-- Track token usage per session for cost accounting
+CREATE TABLE IF NOT EXISTS token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    cost REAL NOT NULL,  -- Cost in USD
+    context TEXT,  -- JSON object for additional metadata
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for cost queries
+CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);
+CREATE INDEX IF NOT EXISTS idx_token_usage_model ON token_usage(model);
+CREATE INDEX IF NOT EXISTS idx_token_usage_timestamp ON token_usage(timestamp);
+
+-- View for daily cost summary
+CREATE VIEW IF NOT EXISTS v_daily_costs AS
+SELECT
+    date(timestamp) as day,
+    model,
+    SUM(input_tokens) as total_input_tokens,
+    SUM(output_tokens) as total_output_tokens,
+    SUM(cost) as total_cost,
+    COUNT(*) as record_count
+FROM token_usage
+GROUP BY date(timestamp), model
+ORDER BY day DESC, model;
+
+-- View for session cost summary
+CREATE VIEW IF NOT EXISTS v_session_costs AS
+SELECT
+    session_id,
+    MIN(timestamp) as first_use,
+    MAX(timestamp) as last_use,
+    SUM(input_tokens) as total_input_tokens,
+    SUM(output_tokens) as total_output_tokens,
+    SUM(cost) as total_cost,
+    COUNT(*) as record_count,
+    GROUP_CONCAT(DISTINCT model) as models_used
+FROM token_usage
+GROUP BY session_id
+ORDER BY total_cost DESC

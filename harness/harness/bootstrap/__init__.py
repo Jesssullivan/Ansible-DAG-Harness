@@ -6,6 +6,10 @@ DAG harness from scratch within MCP client.
 Usage:
     harness bootstrap              # Full interactive setup
     harness bootstrap --check-only # Verify current state
+    harness credentials            # Discover and validate credentials
+    harness credentials --prompt   # Interactive credential setup
+    harness upgrade                # Check for and install updates
+    harness upgrade --check        # Check only, don't install
 
 Components:
     - BootstrapRunner: Main orchestrator
@@ -13,6 +17,11 @@ Components:
     - CredentialDiscovery: Credential detection and validation
     - PathResolver: Path resolution and validation
     - SelfTester: Post-install verification tests
+    - PlatformInfo: Platform detection
+    - Installer: Installation logic
+    - KeyDiscovery: Parallel key discovery
+    - CredentialValidator: Async validation
+    - CredentialPrompts: Interactive prompts
 """
 
 import os
@@ -23,19 +32,61 @@ from typing import Optional
 from rich.console import Console
 
 from harness.bootstrap.credentials import (
-    CredentialDiscovery,
     CredentialCheckResult,
+    CredentialDiscovery,
     CredentialStatus,
 )
+from harness.bootstrap.discovery import (
+    KEY_REGISTRY,
+    KeyConfig,
+    KeyDiscovery,
+    KeyInfo,
+    KeyStatus,
+)
+from harness.bootstrap.installer import (
+    Installer,
+    InstallMethod,
+    InstallResult,
+    InstallStatus,
+    install,
+)
 from harness.bootstrap.paths import (
-    PathResolver,
     PathCheckResult,
+    PathResolver,
     PathStatus,
+)
+
+# New modules
+from harness.bootstrap.platform import (
+    OS,
+    Architecture,
+    PackageManager,
+    PlatformInfo,
+    check_binary_compatibility,
+    detect_platform,
+    find_python,
+)
+from harness.bootstrap.prompts import (
+    CredentialPrompts,
+    interactive_setup,
 )
 from harness.bootstrap.selftest import (
     SelfTester,
     SelfTestResult,
     TestStatus,
+)
+from harness.bootstrap.upgrade import (
+    UpgradeResult,
+    UpgradeStatus,
+    VersionInfo,
+    check_for_upgrade,
+    upgrade,
+)
+from harness.bootstrap.validation import (
+    CredentialValidator,
+    ValidationResult,
+    ValidationStatus,
+    validate_credentials,
 )
 from harness.bootstrap.wizard import (
     BootstrapWizard,
@@ -47,11 +98,12 @@ from harness.bootstrap.wizard import (
 @dataclass
 class BootstrapResult:
     """Result of running the bootstrap process."""
+
     success: bool
     message: str
-    credentials: Optional[CredentialCheckResult] = None
-    paths: Optional[PathCheckResult] = None
-    selftests: Optional[SelfTestResult] = None
+    credentials: CredentialCheckResult | None = None
+    paths: PathCheckResult | None = None
+    selftests: SelfTestResult | None = None
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -76,9 +128,9 @@ class BootstrapRunner:
 
     def __init__(
         self,
-        project_root: Optional[Path] = None,
-        console: Optional[Console] = None,
-        interactive: bool = True
+        project_root: Path | None = None,
+        console: Console | None = None,
+        interactive: bool = True,
     ):
         """Initialize the bootstrap runner.
 
@@ -95,11 +147,7 @@ class BootstrapRunner:
         self.credential_discovery = CredentialDiscovery(self.project_root)
         self.path_resolver = PathResolver(self.project_root)
         self.self_tester = SelfTester(self.project_root)
-        self.wizard = BootstrapWizard(
-            self.project_root,
-            self.console,
-            self.interactive
-        )
+        self.wizard = BootstrapWizard(self.project_root, self.console, self.interactive)
 
     def run(self, check_only: bool = False) -> BootstrapResult:
         """Run the bootstrap process.
@@ -119,7 +167,7 @@ class BootstrapRunner:
             paths=None,
             selftests=None,
             errors=wizard_result.state.errors,
-            warnings=wizard_result.state.warnings
+            warnings=wizard_result.state.warnings,
         )
 
     def check_prerequisites(self) -> tuple[bool, list[str]]:
@@ -132,19 +180,18 @@ class BootstrapRunner:
 
         # Check Python version
         import sys
-        if sys.version_info < (3, 10):
-            issues.append(f"Python 3.10+ required (found {sys.version_info.major}.{sys.version_info.minor})")
 
         # Check for required packages
         try:
-            import typer
-            import rich
             import langgraph
+            import rich
+            import typer
         except ImportError as e:
             issues.append(f"Missing required package: {e.name}")
 
         # Check git is available
         import subprocess
+
         try:
             subprocess.run(["git", "--version"], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -154,7 +201,9 @@ class BootstrapRunner:
         try:
             subprocess.run(["uv", "--version"], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
-            issues.append("uv not available (install with: curl -LsSf https://astral.sh/uv/install.sh | sh)")
+            issues.append(
+                "uv not available (install with: curl -LsSf https://astral.sh/uv/install.sh | sh)"
+            )
 
         return len(issues) == 0, issues
 
@@ -171,6 +220,7 @@ class BootstrapRunner:
 
         try:
             import json
+
             with open(settings_path) as f:
                 settings = json.load(f)
             if "mcpServers" not in settings or "dag-harness" not in settings["mcpServers"]:
@@ -180,8 +230,7 @@ class BootstrapRunner:
 
         # Check for database
         db_path = os.environ.get(
-            "HARNESS_DB_PATH",
-            str(self.project_root / "harness" / "harness.db")
+            "HARNESS_DB_PATH", str(self.project_root / "harness" / "harness.db")
         )
         if not Path(db_path).exists():
             return False
@@ -190,10 +239,7 @@ class BootstrapRunner:
 
 
 # Convenience function for CLI
-def bootstrap(
-    check_only: bool = False,
-    project_root: Optional[Path] = None
-) -> BootstrapResult:
+def bootstrap(check_only: bool = False, project_root: Path | None = None) -> BootstrapResult:
     """Run the bootstrap process.
 
     Args:
@@ -214,7 +260,7 @@ __all__ = [
     "BootstrapWizard",
     "WizardResult",
     "WizardStep",
-    # Credential discovery
+    # Credential discovery (legacy)
     "CredentialDiscovery",
     "CredentialCheckResult",
     "CredentialStatus",
@@ -226,6 +272,40 @@ __all__ = [
     "SelfTester",
     "SelfTestResult",
     "TestStatus",
+    # Platform detection
+    "PlatformInfo",
+    "OS",
+    "Architecture",
+    "PackageManager",
+    "detect_platform",
+    "find_python",
+    "check_binary_compatibility",
+    # Installer
+    "Installer",
+    "InstallResult",
+    "InstallMethod",
+    "InstallStatus",
+    "install",
+    # Upgrade
+    "VersionInfo",
+    "UpgradeResult",
+    "UpgradeStatus",
+    "check_for_upgrade",
+    "upgrade",
+    # Key discovery (new)
+    "KeyDiscovery",
+    "KeyInfo",
+    "KeyConfig",
+    "KeyStatus",
+    "KEY_REGISTRY",
+    # Validation
+    "CredentialValidator",
+    "ValidationResult",
+    "ValidationStatus",
+    "validate_credentials",
+    # Prompts
+    "CredentialPrompts",
+    "interactive_setup",
     # Convenience function
     "bootstrap",
 ]

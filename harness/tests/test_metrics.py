@@ -1,12 +1,13 @@
 """Tests for golden metrics tracking."""
 
 import pytest
+
 from harness.db.state import StateDB
 from harness.metrics.golden import (
+    DEFAULT_GOLDEN_METRICS,
     GoldenMetric,
     GoldenMetricsTracker,
     MetricType,
-    DEFAULT_GOLDEN_METRICS,
 )
 
 
@@ -23,7 +24,7 @@ class TestGoldenMetric:
             warning_threshold=1.5,
             critical_threshold=2.0,
             description="Test metric",
-            unit="ms"
+            unit="ms",
         )
 
         assert metric.name == "test_metric"
@@ -127,9 +128,7 @@ class TestGoldenMetricsTracker:
         tracker = GoldenMetricsTracker(db)
 
         status = tracker.record(
-            "workflow_completion_time",
-            100.0,
-            context={"role": "common", "wave": 0}
+            "workflow_completion_time", 100.0, context={"role": "common", "wave": 0}
         )
         assert status == "ok"
 
@@ -207,7 +206,7 @@ class TestGoldenMetricsTracker:
         """Update baseline for a metric."""
         tracker = GoldenMetricsTracker(db)
 
-        original = tracker.metrics["workflow_completion_time"].baseline_value
+        tracker.metrics["workflow_completion_time"].baseline_value
         tracker.update_baseline("workflow_completion_time", 200.0)
 
         assert tracker.metrics["workflow_completion_time"].baseline_value == 200.0
@@ -234,7 +233,7 @@ class TestGoldenMetricsTracker:
             metric_type=MetricType.COUNT,
             baseline_value=10.0,
             warning_threshold=2.0,
-            critical_threshold=5.0
+            critical_threshold=5.0,
         )
         tracker.register_metric(custom)
 

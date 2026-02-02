@@ -1,10 +1,11 @@
 """Tests for graph operations: dependencies, cycles, topological sort."""
 
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import assume, given, settings
+
+from harness.db.models import CyclicDependencyError, DependencyType, Role, RoleDependency
 from harness.db.state import StateDB
-from harness.db.models import Role, RoleDependency, DependencyType, CyclicDependencyError
-from tests.strategies import dag_graph_strategy, cyclic_graph_strategy, self_loop_graph_strategy
+from tests.strategies import cyclic_graph_strategy, dag_graph_strategy, self_loop_graph_strategy
 
 
 class TestDependencyGraph:
@@ -142,13 +143,17 @@ class TestCycleDetection:
         b = db.get_role("role_b")
 
         # A depends on B
-        db.add_dependency(RoleDependency(
-            role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
         # B depends on A (creates cycle)
-        db.add_dependency(RoleDependency(
-            role_id=b.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=b.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         cycles = db.detect_cycles()
         assert len(cycles) == 1
@@ -163,9 +168,11 @@ class TestCycleDetection:
         db.upsert_role(role)
         r = db.get_role("self_dep")
 
-        db.add_dependency(RoleDependency(
-            role_id=r.id, depends_on_id=r.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=r.id, depends_on_id=r.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         cycles = db.detect_cycles()
         assert len(cycles) == 1
@@ -183,15 +190,21 @@ class TestCycleDetection:
         c = db.get_role("role_c")
 
         # A -> B -> C -> A
-        db.add_dependency(RoleDependency(
-            role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
-        ))
-        db.add_dependency(RoleDependency(
-            role_id=b.id, depends_on_id=c.id, dependency_type=DependencyType.EXPLICIT
-        ))
-        db.add_dependency(RoleDependency(
-            role_id=c.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
+        db.add_dependency(
+            RoleDependency(
+                role_id=b.id, depends_on_id=c.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
+        db.add_dependency(
+            RoleDependency(
+                role_id=c.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         cycles = db.detect_cycles()
         assert len(cycles) == 1
@@ -212,20 +225,28 @@ class TestCycleDetection:
         b2 = db.get_role("b2")
 
         # Cycle 1: a1 -> a2 -> a1
-        db.add_dependency(RoleDependency(
-            role_id=a1.id, depends_on_id=a2.id, dependency_type=DependencyType.EXPLICIT
-        ))
-        db.add_dependency(RoleDependency(
-            role_id=a2.id, depends_on_id=a1.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=a1.id, depends_on_id=a2.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
+        db.add_dependency(
+            RoleDependency(
+                role_id=a2.id, depends_on_id=a1.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         # Cycle 2: b1 -> b2 -> b1
-        db.add_dependency(RoleDependency(
-            role_id=b1.id, depends_on_id=b2.id, dependency_type=DependencyType.EXPLICIT
-        ))
-        db.add_dependency(RoleDependency(
-            role_id=b2.id, depends_on_id=b1.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=b1.id, depends_on_id=b2.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
+        db.add_dependency(
+            RoleDependency(
+                role_id=b2.id, depends_on_id=b1.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         cycles = db.detect_cycles()
         assert len(cycles) == 2
@@ -250,11 +271,13 @@ class TestCycleDetection:
             from_role = db.get_role(from_node)
             to_role = db.get_role(to_node)
             if from_role and to_role:
-                db.add_dependency(RoleDependency(
-                    role_id=from_role.id,
-                    depends_on_id=to_role.id,
-                    dependency_type=DependencyType.EXPLICIT
-                ))
+                db.add_dependency(
+                    RoleDependency(
+                        role_id=from_role.id,
+                        depends_on_id=to_role.id,
+                        dependency_type=DependencyType.EXPLICIT,
+                    )
+                )
 
         cycles = db.detect_cycles()
         assert cycles == []
@@ -279,11 +302,13 @@ class TestCycleDetection:
             to_role = db.get_role(to_node)
             if from_role and to_role:
                 try:
-                    db.add_dependency(RoleDependency(
-                        role_id=from_role.id,
-                        depends_on_id=to_role.id,
-                        dependency_type=DependencyType.EXPLICIT
-                    ))
+                    db.add_dependency(
+                        RoleDependency(
+                            role_id=from_role.id,
+                            depends_on_id=to_role.id,
+                            dependency_type=DependencyType.EXPLICIT,
+                        )
+                    )
                 except Exception:
                     pass  # Ignore duplicate edges
 
@@ -310,11 +335,13 @@ class TestCycleDetection:
             to_role = db.get_role(to_node)
             if from_role and to_role:
                 try:
-                    db.add_dependency(RoleDependency(
-                        role_id=from_role.id,
-                        depends_on_id=to_role.id,
-                        dependency_type=DependencyType.EXPLICIT
-                    ))
+                    db.add_dependency(
+                        RoleDependency(
+                            role_id=from_role.id,
+                            depends_on_id=to_role.id,
+                            dependency_type=DependencyType.EXPLICIT,
+                        )
+                    )
                 except Exception:
                     pass
 
@@ -372,12 +399,16 @@ class TestTopologicalSort:
         a = db.get_role("a")
         b = db.get_role("b")
 
-        db.add_dependency(RoleDependency(
-            role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
-        ))
-        db.add_dependency(RoleDependency(
-            role_id=b.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
+        db.add_dependency(
+            RoleDependency(
+                role_id=b.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         with pytest.raises(CyclicDependencyError) as exc_info:
             db.get_deployment_order(raise_on_cycle=True)
@@ -397,17 +428,23 @@ class TestTopologicalSort:
         d = db.get_role("d")
 
         # a -> b -> a (cycle)
-        db.add_dependency(RoleDependency(
-            role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
-        ))
-        db.add_dependency(RoleDependency(
-            role_id=b.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
+        db.add_dependency(
+            RoleDependency(
+                role_id=b.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         # c and d are not in cycle
-        db.add_dependency(RoleDependency(
-            role_id=d.id, depends_on_id=c.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=d.id, depends_on_id=c.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         order = db.get_deployment_order(raise_on_cycle=False)
         # c and d should be in order (c before d)
@@ -435,11 +472,13 @@ class TestTopologicalSort:
             to_role = db.get_role(to_node)
             if from_role and to_role:
                 try:
-                    db.add_dependency(RoleDependency(
-                        role_id=from_role.id,
-                        depends_on_id=to_role.id,
-                        dependency_type=DependencyType.EXPLICIT
-                    ))
+                    db.add_dependency(
+                        RoleDependency(
+                            role_id=from_role.id,
+                            depends_on_id=to_role.id,
+                            dependency_type=DependencyType.EXPLICIT,
+                        )
+                    )
                 except Exception:
                     pass
 
@@ -450,8 +489,9 @@ class TestTopologicalSort:
         # Edge (a, b) means a depends on b, so b must come before a
         for from_node, to_node in edges:
             if from_node in order_idx and to_node in order_idx:
-                assert order_idx[to_node] < order_idx[from_node], \
+                assert order_idx[to_node] < order_idx[from_node], (
                     f"{to_node} should come before {from_node}"
+                )
 
 
 class TestValidateDependencies:
@@ -478,12 +518,16 @@ class TestValidateDependencies:
         a = db.get_role("a")
         b = db.get_role("b")
 
-        db.add_dependency(RoleDependency(
-            role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
-        ))
-        db.add_dependency(RoleDependency(
-            role_id=b.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=a.id, depends_on_id=b.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
+        db.add_dependency(
+            RoleDependency(
+                role_id=b.id, depends_on_id=a.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         result = db.validate_dependencies()
         assert result["valid"] is False
@@ -496,9 +540,11 @@ class TestValidateDependencies:
         db.upsert_role(role)
         r = db.get_role("self_dep")
 
-        db.add_dependency(RoleDependency(
-            role_id=r.id, depends_on_id=r.id, dependency_type=DependencyType.EXPLICIT
-        ))
+        db.add_dependency(
+            RoleDependency(
+                role_id=r.id, depends_on_id=r.id, dependency_type=DependencyType.EXPLICIT
+            )
+        )
 
         result = db.validate_dependencies()
         assert result["valid"] is False

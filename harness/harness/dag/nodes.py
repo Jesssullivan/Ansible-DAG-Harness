@@ -9,16 +9,15 @@ Follows LangGraph patterns:
 
 import asyncio
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Optional, TypeVar
-
-from pydantic import BaseModel
+from typing import Any
 
 
 class NodeResult(str, Enum):
     """Possible outcomes from node execution."""
+
     SUCCESS = "success"
     FAILURE = "failure"
     SKIP = "skip"
@@ -37,6 +36,7 @@ class NodeContext:
     - Execution metadata
     - Access to state database
     """
+
     role_name: str
     execution_id: int
     state: dict[str, Any] = field(default_factory=dict)
@@ -106,8 +106,12 @@ class Node(ABC):
 class FunctionNode(Node):
     """Node that wraps a simple function."""
 
-    def __init__(self, name: str, func: Callable[[NodeContext], tuple[NodeResult, dict[str, Any]]],
-                 description: str = ""):
+    def __init__(
+        self,
+        name: str,
+        func: Callable[[NodeContext], tuple[NodeResult, dict[str, Any]]],
+        description: str = "",
+    ):
         super().__init__(name, description)
         self._func = func
 
@@ -129,8 +133,7 @@ class ConditionalEdge:
         )
     """
 
-    def __init__(self, condition: Callable[[NodeContext], bool],
-                 if_true: str, if_false: str):
+    def __init__(self, condition: Callable[[NodeContext], bool], if_true: str, if_false: str):
         self.condition = condition
         self.if_true = if_true
         self.if_false = if_false
@@ -151,8 +154,7 @@ class RouterEdge:
         )
     """
 
-    def __init__(self, router: Callable[[NodeContext], str],
-                 possible_targets: list[str]):
+    def __init__(self, router: Callable[[NodeContext], str], possible_targets: list[str]):
         self.router = router
         self.possible_targets = possible_targets
 
@@ -171,6 +173,7 @@ Edge = str | ConditionalEdge | RouterEdge
 @dataclass
 class NodeDefinition:
     """Definition of a node in the workflow graph."""
+
     name: str
     node: Node
     edges: dict[NodeResult, Edge] = field(default_factory=dict)
@@ -185,25 +188,23 @@ class NodeDefinition:
                 edges_dict[result.value] = {
                     "type": "conditional",
                     "if_true": edge.if_true,
-                    "if_false": edge.if_false
+                    "if_false": edge.if_false,
                 }
             elif isinstance(edge, RouterEdge):
-                edges_dict[result.value] = {
-                    "type": "router",
-                    "targets": edge.possible_targets
-                }
+                edges_dict[result.value] = {"type": "router", "targets": edge.possible_targets}
         return {
             "name": self.name,
             "description": self.node.description,
             "retries": self.node.retries,
             "timeout_seconds": self.node.timeout_seconds,
-            "edges": edges_dict
+            "edges": edges_dict,
         }
 
 
 # ============================================================================
 # BUILT-IN NODES FOR BOX-UP-ROLE WORKFLOW
 # ============================================================================
+
 
 class ValidateRoleNode(Node):
     """Validate that the role exists and extract metadata."""
@@ -228,7 +229,7 @@ class ValidateRoleNode(Node):
         return NodeResult.SUCCESS, {
             "role_path": str(role_path),
             "has_molecule_tests": has_molecule,
-            "has_meta": has_meta
+            "has_meta": has_meta,
         }
 
 
@@ -247,7 +248,7 @@ class AnalyzeDependenciesNode(Node):
                 ["python", "scripts/analyze-role-deps.py", ctx.role_name, "--json"],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=60,
             )
 
             if result.returncode != 0:
@@ -261,7 +262,7 @@ class AnalyzeDependenciesNode(Node):
                 "implicit_deps": analysis.get("implicit_deps", []),
                 "credentials": analysis.get("credentials", []),
                 "reverse_deps": analysis.get("reverse_deps", []),
-                "tags": analysis.get("tags", [])
+                "tags": analysis.get("tags", []),
             }
 
         except subprocess.TimeoutExpired:
@@ -291,7 +292,7 @@ class CheckReverseDepsNode(Node):
             result = subprocess.run(
                 ["git", "ls-remote", "--heads", "origin", f"sid/{dep}"],
                 capture_output=True,
-                text=True
+                text=True,
             )
             if not result.stdout.strip():
                 blocking.append(dep)
@@ -299,7 +300,7 @@ class CheckReverseDepsNode(Node):
         if blocking:
             return NodeResult.FAILURE, {
                 "blocking_deps": blocking,
-                "error": f"Must box up first: {', '.join(blocking)}"
+                "error": f"Must box up first: {', '.join(blocking)}",
             }
 
         return NodeResult.SUCCESS, {"blocking_deps": []}
@@ -319,7 +320,7 @@ class CreateWorktreeNode(Node):
                 ["scripts/create-role-worktree.sh", ctx.role_name],
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=300,
             )
 
             if result.returncode != 0:
@@ -328,7 +329,7 @@ class CreateWorktreeNode(Node):
             worktree_path = f"../sid-{ctx.role_name}"
             return NodeResult.SUCCESS, {
                 "worktree_path": worktree_path,
-                "branch": f"sid/{ctx.role_name}"
+                "branch": f"sid/{ctx.role_name}",
             }
 
         except subprocess.TimeoutExpired:
@@ -338,11 +339,11 @@ class CreateWorktreeNode(Node):
 
     async def rollback(self, ctx: NodeContext) -> None:
         import subprocess
+
         worktree_path = ctx.get("worktree_path")
         if worktree_path:
             subprocess.run(
-                ["git", "worktree", "remove", worktree_path, "--force"],
-                capture_output=True
+                ["git", "worktree", "remove", worktree_path, "--force"], capture_output=True
             )
 
 
@@ -367,7 +368,7 @@ class RunMoleculeTestsNode(Node):
                 capture_output=True,
                 text=True,
                 timeout=self.timeout_seconds,
-                cwd=ctx.get("worktree_path", ".")
+                cwd=ctx.get("worktree_path", "."),
             )
 
             duration = int(time.time() - start_time)
@@ -377,18 +378,15 @@ class RunMoleculeTestsNode(Node):
                     "molecule_passed": False,
                     "molecule_duration": duration,
                     "molecule_output": result.stdout[-5000:],  # Last 5KB
-                    "error": "Molecule tests failed"
+                    "error": "Molecule tests failed",
                 }
 
-            return NodeResult.SUCCESS, {
-                "molecule_passed": True,
-                "molecule_duration": duration
-            }
+            return NodeResult.SUCCESS, {"molecule_passed": True, "molecule_duration": duration}
 
         except subprocess.TimeoutExpired:
             return NodeResult.FAILURE, {
                 "molecule_passed": False,
-                "error": "Molecule tests timed out"
+                "error": "Molecule tests timed out",
             }
 
 
@@ -419,10 +417,7 @@ Wave {wave}: {wave_name}
 
             # Check if there are changes to commit
             status = subprocess.run(
-                ["git", "status", "--porcelain"],
-                cwd=worktree_path,
-                capture_output=True,
-                text=True
+                ["git", "status", "--porcelain"], cwd=worktree_path, capture_output=True, text=True
             )
 
             if not status.stdout.strip():
@@ -430,12 +425,16 @@ Wave {wave}: {wave_name}
 
             # Create commit
             result = subprocess.run(
-                ["git", "commit",
-                 "--author=Jess Sullivan <jsullivan2@bates.edu>",
-                 "-m", commit_msg],
+                [
+                    "git",
+                    "commit",
+                    "--author=Jess Sullivan <jsullivan2@bates.edu>",
+                    "-m",
+                    commit_msg,
+                ],
                 cwd=worktree_path,
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if result.returncode != 0:
@@ -443,15 +442,12 @@ Wave {wave}: {wave_name}
 
             # Get commit SHA
             sha_result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=worktree_path,
-                capture_output=True,
-                text=True
+                ["git", "rev-parse", "HEAD"], cwd=worktree_path, capture_output=True, text=True
             )
 
             return NodeResult.SUCCESS, {
                 "commit_sha": sha_result.stdout.strip(),
-                "commit_message": commit_msg
+                "commit_message": commit_msg,
             }
 
         except subprocess.CalledProcessError as e:
@@ -475,7 +471,7 @@ class PushBranchNode(Node):
                 ["git", "push", "-u", "origin", branch],
                 cwd=worktree_path,
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if result.returncode != 0:
@@ -502,7 +498,7 @@ class CreateGitLabIssueNode(Node):
                 ["scripts/create-gitlab-issues.sh", ctx.role_name, "--json"],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=60,
             )
 
             if result.returncode != 0:
@@ -512,7 +508,7 @@ class CreateGitLabIssueNode(Node):
             return NodeResult.SUCCESS, {
                 "issue_url": issue_data.get("issue_url"),
                 "issue_iid": issue_data.get("issue_iid"),
-                "iteration_assigned": issue_data.get("iteration_id") is not None
+                "iteration_assigned": issue_data.get("iteration_id") is not None,
             }
 
         except subprocess.TimeoutExpired:
@@ -540,11 +536,10 @@ class CreateMergeRequestNode(Node):
 
         try:
             result = subprocess.run(
-                ["scripts/create-gitlab-mr.sh", ctx.role_name,
-                 "--issue", str(issue_iid), "--json"],
+                ["scripts/create-gitlab-mr.sh", ctx.role_name, "--issue", str(issue_iid), "--json"],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=60,
             )
 
             if result.returncode != 0:
@@ -553,7 +548,7 @@ class CreateMergeRequestNode(Node):
             mr_data = json.loads(result.stdout)
             return NodeResult.SUCCESS, {
                 "mr_url": mr_data.get("mr_url"),
-                "mr_iid": mr_data.get("mr_iid")
+                "mr_iid": mr_data.get("mr_iid"),
             }
 
         except subprocess.TimeoutExpired:
@@ -580,7 +575,7 @@ class ReportSummaryNode(Node):
             "mr_url": ctx.get("mr_url"),
             "molecule_passed": ctx.get("molecule_passed"),
             "credentials": ctx.get("credentials", []),
-            "dependencies": ctx.get("explicit_deps", [])
+            "dependencies": ctx.get("explicit_deps", []),
         }
 
         return NodeResult.SUCCESS, {"summary": summary}

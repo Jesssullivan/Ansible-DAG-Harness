@@ -8,14 +8,14 @@ import asyncio
 import json
 import logging
 import os
-import signal
 import subprocess
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from harness.hotl.agent_session import (
     AgentSession,
@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ClaudeAgentConfig:
     """Configuration for Claude Code agent spawning."""
+
     # Path to claude CLI executable
     claude_cli_path: str = "claude"
 
@@ -41,7 +42,7 @@ class ClaudeAgentConfig:
     max_concurrent_agents: int = 3
 
     # Working directory for agent output
-    agent_output_dir: Optional[Path] = None
+    agent_output_dir: Path | None = None
 
     # Environment variables to pass to agent
     env_vars: dict[str, str] = field(default_factory=dict)
@@ -50,10 +51,10 @@ class ClaudeAgentConfig:
     skip_permissions: bool = False
 
     # Model to use (if not default)
-    model: Optional[str] = None
+    model: str | None = None
 
     # MCP config file path
-    mcp_config: Optional[Path] = None
+    mcp_config: Path | None = None
 
 
 class HOTLClaudeIntegration:
@@ -66,9 +67,9 @@ class HOTLClaudeIntegration:
 
     def __init__(
         self,
-        config: Optional[ClaudeAgentConfig] = None,
-        session_manager: Optional[AgentSessionManager] = None,
-        db: Optional[Any] = None,
+        config: ClaudeAgentConfig | None = None,
+        session_manager: AgentSessionManager | None = None,
+        db: Any | None = None,
     ):
         """
         Initialize Claude integration.
@@ -91,15 +92,15 @@ class HOTLClaudeIntegration:
         self._semaphore = threading.Semaphore(self.config.max_concurrent_agents)
 
         # Callbacks for status updates
-        self._on_complete: Optional[Callable[[AgentSession], None]] = None
-        self._on_progress: Optional[Callable[[str, str], None]] = None
-        self._on_intervention: Optional[Callable[[AgentSession], None]] = None
+        self._on_complete: Callable[[AgentSession], None] | None = None
+        self._on_progress: Callable[[str, str], None] | None = None
+        self._on_intervention: Callable[[AgentSession], None] | None = None
 
     def set_callbacks(
         self,
-        on_complete: Optional[Callable[[AgentSession], None]] = None,
-        on_progress: Optional[Callable[[str, str], None]] = None,
-        on_intervention: Optional[Callable[[AgentSession], None]] = None,
+        on_complete: Callable[[AgentSession], None] | None = None,
+        on_progress: Callable[[str, str], None] | None = None,
+        on_intervention: Callable[[AgentSession], None] | None = None,
     ) -> None:
         """
         Set callbacks for agent events.
@@ -117,9 +118,9 @@ class HOTLClaudeIntegration:
         self,
         task: str,
         working_dir: Path,
-        context: Optional[dict[str, Any]] = None,
-        timeout: Optional[int] = None,
-        execution_id: Optional[int] = None,
+        context: dict[str, Any] | None = None,
+        timeout: int | None = None,
+        execution_id: int | None = None,
     ) -> AgentSession:
         """
         Spawn a new Claude Code subagent for a task.
@@ -356,16 +357,18 @@ class HOTLClaudeIntegration:
             parts.append("")
 
         # Add instructions for MCP tools
-        parts.extend([
-            "## Instructions",
-            "1. Work autonomously to complete the task",
-            "2. Use the agent_report_progress MCP tool periodically to report status",
-            "3. If you encounter a problem you cannot solve, use agent_request_intervention",
-            "4. Track all file changes using agent_log_file_operation",
-            "5. When complete, provide a summary of changes made",
-            "",
-            "Begin working on the task now.",
-        ])
+        parts.extend(
+            [
+                "## Instructions",
+                "1. Work autonomously to complete the task",
+                "2. Use the agent_report_progress MCP tool periodically to report status",
+                "3. If you encounter a problem you cannot solve, use agent_request_intervention",
+                "4. Track all file changes using agent_log_file_operation",
+                "5. When complete, provide a summary of changes made",
+                "",
+                "Begin working on the task now.",
+            ]
+        )
 
         return "\n".join(parts)
 
@@ -388,22 +391,28 @@ class HOTLClaudeIntegration:
         # These patterns match common Claude Code output
         if line.startswith("Created ") or line.startswith("Wrote "):
             path = line.split(" ", 1)[-1].strip()
-            session.add_file_change(FileChange(
-                file_path=path,
-                change_type=FileChangeType.CREATE,
-            ))
+            session.add_file_change(
+                FileChange(
+                    file_path=path,
+                    change_type=FileChangeType.CREATE,
+                )
+            )
         elif line.startswith("Modified ") or line.startswith("Updated "):
             path = line.split(" ", 1)[-1].strip()
-            session.add_file_change(FileChange(
-                file_path=path,
-                change_type=FileChangeType.MODIFY,
-            ))
+            session.add_file_change(
+                FileChange(
+                    file_path=path,
+                    change_type=FileChangeType.MODIFY,
+                )
+            )
         elif line.startswith("Deleted ") or line.startswith("Removed "):
             path = line.split(" ", 1)[-1].strip()
-            session.add_file_change(FileChange(
-                file_path=path,
-                change_type=FileChangeType.DELETE,
-            ))
+            session.add_file_change(
+                FileChange(
+                    file_path=path,
+                    change_type=FileChangeType.DELETE,
+                )
+            )
 
     def poll_agent(self, session_id: str) -> AgentStatus:
         """
@@ -421,7 +430,7 @@ class HOTLClaudeIntegration:
 
         return session.status
 
-    def get_session(self, session_id: str) -> Optional[AgentSession]:
+    def get_session(self, session_id: str) -> AgentSession | None:
         """
         Get full session details.
 
@@ -612,9 +621,9 @@ class AsyncHOTLClaudeIntegration:
         self,
         task: str,
         working_dir: Path,
-        context: Optional[dict[str, Any]] = None,
-        timeout: Optional[int] = None,
-        execution_id: Optional[int] = None,
+        context: dict[str, Any] | None = None,
+        timeout: int | None = None,
+        execution_id: int | None = None,
     ) -> AgentSession:
         """Async spawn_agent."""
         loop = asyncio.get_event_loop()
@@ -622,14 +631,14 @@ class AsyncHOTLClaudeIntegration:
             self._executor,
             lambda: self._integration.spawn_agent(
                 task, working_dir, context, timeout, execution_id
-            )
+            ),
         )
 
     async def poll_agent(self, session_id: str) -> AgentStatus:
         """Async poll_agent."""
         return self._integration.poll_agent(session_id)
 
-    async def get_session(self, session_id: str) -> Optional[AgentSession]:
+    async def get_session(self, session_id: str) -> AgentSession | None:
         """Async get_session."""
         return self._integration.get_session(session_id)
 
@@ -641,15 +650,14 @@ class AsyncHOTLClaudeIntegration:
         """Async terminate_agent."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            self._executor,
-            lambda: self._integration.terminate_agent(session_id, reason)
+            self._executor, lambda: self._integration.terminate_agent(session_id, reason)
         )
 
     async def wait_for_completion(
         self,
         session_id: str,
         poll_interval: float = 1.0,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> AgentSession:
         """
         Wait for an agent to complete.

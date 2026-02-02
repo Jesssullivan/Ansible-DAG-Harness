@@ -13,7 +13,6 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -33,28 +32,20 @@ CREDENTIAL_PATTERNS = [
 ]
 
 # Compiled regex for performance
-CREDENTIAL_REGEX = re.compile(
-    "|".join(f"({p})" for p in CREDENTIAL_PATTERNS),
-    re.IGNORECASE
-)
+CREDENTIAL_REGEX = re.compile("|".join(f"({p})" for p in CREDENTIAL_PATTERNS), re.IGNORECASE)
 
 # Pattern to extract KeePassXC entry names
 # Matches both: lookup('keepassxc_password', 'Entry') and keepassxc_password('Entry')
 KEEPASS_ENTRY_PATTERN = re.compile(
-    r"(?:lookup\s*\(\s*['\"])?keepassxc_password['\"]?\s*,?\s*['\"]([^'\"]+)['\"]",
-    re.IGNORECASE
+    r"(?:lookup\s*\(\s*['\"])?keepassxc_password['\"]?\s*,?\s*['\"]([^'\"]+)['\"]", re.IGNORECASE
 )
 
 # Pattern to extract vault variable names
-VAULT_VAR_PATTERN = re.compile(
-    r"vault_(\w+)",
-    re.IGNORECASE
-)
+VAULT_VAR_PATTERN = re.compile(r"vault_(\w+)", re.IGNORECASE)
 
 # Pattern for Makefile credential references
 MAKEFILE_CRED_PATTERN = re.compile(
-    r"(?:KEEPASS|VAULT|SECRET|PASSWORD|TOKEN|API_KEY)[\w_]*\s*[:?]?=",
-    re.IGNORECASE
+    r"(?:KEEPASS|VAULT|SECRET|PASSWORD|TOKEN|API_KEY)[\w_]*\s*[:?]?=", re.IGNORECASE
 )
 
 
@@ -66,9 +57,9 @@ class CredentialRef:
     source_file: str
     source_line: int
     pattern_matched: str
-    purpose: Optional[str] = None
+    purpose: str | None = None
     is_base58: bool = False
-    attribute: Optional[str] = None
+    attribute: str | None = None
 
     def __hash__(self) -> int:
         """Enable use in sets for deduplication."""
@@ -93,11 +84,11 @@ class RoleInfo:
     dependencies: list[str] = field(default_factory=list)
     credentials: list[CredentialRef] = field(default_factory=list)
     source_files: list[str] = field(default_factory=list)
-    description: Optional[str] = None
+    description: str | None = None
     has_molecule_tests: bool = False
-    molecule_path: Optional[str] = None
-    wave: Optional[int] = None
-    wave_name: Optional[str] = None
+    molecule_path: str | None = None
+    wave: int | None = None
+    wave_name: str | None = None
 
     def to_role(self) -> Role:
         """Convert to a Role database model."""
@@ -122,7 +113,7 @@ class AnsibleRoleParser:
     - roles/<role>/Makefile or Makefile
     """
 
-    def __init__(self, db: Optional[StateDB] = None):
+    def __init__(self, db: StateDB | None = None):
         """
         Initialize the parser.
 
@@ -239,7 +230,7 @@ class AnsibleRoleParser:
             return []
 
         try:
-            with open(meta_file, "r", encoding="utf-8") as f:
+            with open(meta_file, encoding="utf-8") as f:
                 content = yaml.safe_load(f)
         except yaml.YAMLError as e:
             logger.error(f"Failed to parse YAML in {meta_file}: {e}")
@@ -326,7 +317,7 @@ class AnsibleRoleParser:
         credentials: list[CredentialRef] = []
 
         try:
-            with open(makefile, "r", encoding="utf-8") as f:
+            with open(makefile, encoding="utf-8") as f:
                 lines = f.readlines()
         except Exception as e:
             logger.error(f"Failed to read Makefile {makefile}: {e}")
@@ -337,13 +328,15 @@ class AnsibleRoleParser:
             makefile_match = MAKEFILE_CRED_PATTERN.search(line)
             if makefile_match:
                 cred_name = makefile_match.group(0).rstrip(":?=").strip()
-                credentials.append(CredentialRef(
-                    name=cred_name,
-                    source_file=str(makefile),
-                    source_line=line_num,
-                    pattern_matched="makefile_variable",
-                    purpose="Makefile credential variable",
-                ))
+                credentials.append(
+                    CredentialRef(
+                        name=cred_name,
+                        source_file=str(makefile),
+                        source_line=line_num,
+                        pattern_matched="makefile_variable",
+                        purpose="Makefile credential variable",
+                    )
+                )
 
             # Check for general credential patterns
             general_match = CREDENTIAL_REGEX.search(line)
@@ -357,13 +350,15 @@ class AnsibleRoleParser:
                 # Try to extract a meaningful name
                 cred_name = self._extract_credential_name(line, matched_text)
 
-                credentials.append(CredentialRef(
-                    name=cred_name,
-                    source_file=str(makefile),
-                    source_line=line_num,
-                    pattern_matched=matched_text,
-                    purpose="Credential reference in Makefile",
-                ))
+                credentials.append(
+                    CredentialRef(
+                        name=cred_name,
+                        source_file=str(makefile),
+                        source_line=line_num,
+                        pattern_matched=matched_text,
+                        purpose="Credential reference in Makefile",
+                    )
+                )
 
         return credentials
 
@@ -385,7 +380,7 @@ class AnsibleRoleParser:
         credentials: list[CredentialRef] = []
 
         try:
-            with open(yaml_file, "r", encoding="utf-8") as f:
+            with open(yaml_file, encoding="utf-8") as f:
                 lines = f.readlines()
         except Exception as e:
             logger.error(f"Failed to read {yaml_file}: {e}")
@@ -402,35 +397,41 @@ class AnsibleRoleParser:
                 is_base58 = False
 
                 if "attribute=" in line.lower():
-                    attr_match = re.search(r"attribute\s*=\s*['\"]?(\w+)['\"]?", line, re.IGNORECASE)
+                    attr_match = re.search(
+                        r"attribute\s*=\s*['\"]?(\w+)['\"]?", line, re.IGNORECASE
+                    )
                     if attr_match:
                         attribute = attr_match.group(1)
 
                 if "base58" in line.lower():
                     is_base58 = True
 
-                credentials.append(CredentialRef(
-                    name=entry_name,
-                    source_file=str(yaml_file),
-                    source_line=line_num,
-                    pattern_matched="keepassxc_password",
-                    purpose=f"KeePassXC entry: {entry_name}",
-                    is_base58=is_base58,
-                    attribute=attribute,
-                ))
+                credentials.append(
+                    CredentialRef(
+                        name=entry_name,
+                        source_file=str(yaml_file),
+                        source_line=line_num,
+                        pattern_matched="keepassxc_password",
+                        purpose=f"KeePassXC entry: {entry_name}",
+                        is_base58=is_base58,
+                        attribute=attribute,
+                    )
+                )
                 continue
 
             # Check for vault variable patterns
             vault_match = VAULT_VAR_PATTERN.search(line)
             if vault_match:
                 var_name = vault_match.group(1)
-                credentials.append(CredentialRef(
-                    name=f"vault_{var_name}",
-                    source_file=str(yaml_file),
-                    source_line=line_num,
-                    pattern_matched="vault_variable",
-                    purpose=f"Ansible Vault variable: {var_name}",
-                ))
+                credentials.append(
+                    CredentialRef(
+                        name=f"vault_{var_name}",
+                        source_file=str(yaml_file),
+                        source_line=line_num,
+                        pattern_matched="vault_variable",
+                        purpose=f"Ansible Vault variable: {var_name}",
+                    )
+                )
                 continue
 
             # Check for general credential patterns
@@ -445,14 +446,16 @@ class AnsibleRoleParser:
                 # Check for base58 encoding
                 is_base58 = "base58" in line.lower()
 
-                credentials.append(CredentialRef(
-                    name=cred_name,
-                    source_file=str(yaml_file),
-                    source_line=line_num,
-                    pattern_matched=matched_text,
-                    purpose=purpose,
-                    is_base58=is_base58,
-                ))
+                credentials.append(
+                    CredentialRef(
+                        name=cred_name,
+                        source_file=str(yaml_file),
+                        source_line=line_num,
+                        pattern_matched=matched_text,
+                        purpose=purpose,
+                        is_base58=is_base58,
+                    )
+                )
 
         return credentials
 
@@ -524,7 +527,7 @@ class AnsibleRoleParser:
 
         return f"Credential reference ({matched_text})"
 
-    def _extract_description(self, meta_file: Path) -> Optional[str]:
+    def _extract_description(self, meta_file: Path) -> str | None:
         """
         Extract role description from meta/main.yml.
 
@@ -535,7 +538,7 @@ class AnsibleRoleParser:
             Role description or None
         """
         try:
-            with open(meta_file, "r", encoding="utf-8") as f:
+            with open(meta_file, encoding="utf-8") as f:
                 content = yaml.safe_load(f)
         except Exception:
             return None
@@ -634,9 +637,7 @@ class AnsibleRoleParser:
     # =========================================================================
 
     def populate_database(
-        self,
-        roles_dir: Path,
-        wave_config: Optional[dict[str, tuple[int, str]]] = None
+        self, roles_dir: Path, wave_config: dict[str, tuple[int, str]] | None = None
     ) -> dict[str, int]:
         """
         Parse roles and populate the database.
@@ -683,9 +684,7 @@ class AnsibleRoleParser:
                 dep_id = role_id_map.get(dep_name)
                 if not dep_id:
                     # Dependency references an unknown role
-                    logger.warning(
-                        f"Role {role_info.name} depends on unknown role: {dep_name}"
-                    )
+                    logger.warning(f"Role {role_info.name} depends on unknown role: {dep_name}")
                     continue
 
                 # Find the source file for this dependency
@@ -791,10 +790,7 @@ class AnsibleRoleParser:
         return role_info
 
     def add_implicit_dependency(
-        self,
-        role_name: str,
-        depends_on: str,
-        source_file: Optional[str] = None
+        self, role_name: str, depends_on: str, source_file: str | None = None
     ) -> bool:
         """
         Add an implicit dependency between roles.
@@ -843,10 +839,7 @@ class AnsibleRoleParser:
             return False
 
     def add_credential_dependency(
-        self,
-        role_name: str,
-        depends_on: str,
-        credential_name: str
+        self, role_name: str, depends_on: str, credential_name: str
     ) -> bool:
         """
         Add a credential-based dependency between roles.
@@ -889,8 +882,7 @@ class AnsibleRoleParser:
         try:
             self.db.add_dependency(dependency)
             logger.info(
-                f"Added credential dependency: {role_name} -> {depends_on} "
-                f"(via {credential_name})"
+                f"Added credential dependency: {role_name} -> {depends_on} (via {credential_name})"
             )
             return True
         except Exception as e:
@@ -898,7 +890,7 @@ class AnsibleRoleParser:
             return False
 
 
-def create_parser(db: Optional[StateDB] = None) -> AnsibleRoleParser:
+def create_parser(db: StateDB | None = None) -> AnsibleRoleParser:
     """
     Factory function to create a parser instance.
 

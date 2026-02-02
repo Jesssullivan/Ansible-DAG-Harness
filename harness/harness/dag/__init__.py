@@ -24,17 +24,61 @@ Example migration:
     runner = LangGraphWorkflowRunner(db_path)
     state = create_initial_state(role_name, db_path)
     result = await runner.execute(state)
+
+SUBGRAPH COMPOSITION (Task #22):
+    The workflow is now organized into modular subgraphs for better
+    testability and maintainability:
+
+    - Validation Subgraph: Role validation and dependency analysis
+    - Testing Subgraph: Molecule, pytest, and deploy validation
+    - GitLab Subgraph: Issue, MR, and merge train operations
+    - Notification Subgraph: Summary and failure notifications
+
+    Use the composed workflow for production:
+        from harness.dag import create_composed_workflow
+        workflow = create_composed_workflow(db_path)
+        compiled = workflow.compile()
+        result = await compiled.ainvoke(initial_state)
+
+    Or use individual subgraphs for testing:
+        from harness.dag import create_validation_subgraph
+        validation = create_validation_subgraph()
+        result = await validation.ainvoke(test_state)
 """
 
 import warnings
 from typing import Any
 
+# Checkpointer factory with Postgres/SQLite support (Task #23)
+from harness.dag.checkpointer import (
+    CheckpointerContext,
+    CheckpointerFactory,
+    check_postgres_health,
+    cleanup_old_checkpoints,
+    cleanup_old_checkpoints_by_url,
+    get_postgres_url,
+    is_postgres_available,
+    migrate_sqlite_to_postgres,
+)
+
 # LangGraph implementation (recommended)
 from harness.dag.langgraph_engine import (
     BoxUpRoleState,
     LangGraphWorkflowRunner,
-    create_box_up_role_graph as create_langgraph_workflow,
     create_initial_state,
+)
+from harness.dag.langgraph_engine import (
+    create_box_up_role_graph as create_langgraph_workflow,
+)
+
+# Subgraph composition (Task #22)
+from harness.dag.subgraphs import (
+    SubgraphWorkflowRunner,
+    create_composed_workflow,
+    create_gitlab_subgraph,
+    create_notification_subgraph,
+    create_testing_subgraph,
+    create_validation_subgraph,
 )
 
 # Track which deprecated names have been warned about
@@ -66,19 +110,22 @@ def __getattr__(name: str) -> Any:
                 f"Please migrate to the LangGraph implementation. "
                 f"See harness.dag module docstring for migration guide.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             _warned_deprecations.add(name)
 
         # Import and return the deprecated item
         if module_path == "harness.dag.graph":
-            from harness.dag.graph import WorkflowGraph, create_box_up_role_graph as _create_graph
+            from harness.dag.graph import WorkflowGraph
+            from harness.dag.graph import create_box_up_role_graph as _create_graph
+
             if name == "WorkflowGraph":
                 return WorkflowGraph
             elif name == "create_box_up_role_graph":
                 return _create_graph
         elif module_path == "harness.dag.nodes":
-            from harness.dag.nodes import Node, NodeResult, NodeContext
+            from harness.dag.nodes import Node, NodeContext, NodeResult
+
             if name == "Node":
                 return Node
             elif name == "NodeResult":
@@ -100,6 +147,22 @@ __all__ = [
     "LangGraphWorkflowRunner",
     "create_langgraph_workflow",
     "create_initial_state",
+    # Subgraph composition (Task #22)
+    "create_validation_subgraph",
+    "create_testing_subgraph",
+    "create_gitlab_subgraph",
+    "create_notification_subgraph",
+    "create_composed_workflow",
+    "SubgraphWorkflowRunner",
+    # Checkpointer factory (Task #23)
+    "CheckpointerFactory",
+    "CheckpointerContext",
+    "check_postgres_health",
+    "cleanup_old_checkpoints",
+    "cleanup_old_checkpoints_by_url",
+    "migrate_sqlite_to_postgres",
+    "is_postgres_available",
+    "get_postgres_url",
     # Deprecated exports (will warn on use)
     "WorkflowGraph",
     "Node",

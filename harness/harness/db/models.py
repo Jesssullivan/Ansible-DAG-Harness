@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class CyclicDependencyError(Exception):
     """Raised when a cyclic dependency is detected in the role graph."""
 
-    def __init__(self, message: str, cycle_path: Optional[list[str]] = None):
+    def __init__(self, message: str, cycle_path: list[str] | None = None):
         super().__init__(message)
         self.cycle_path = cycle_path or []
 
@@ -66,184 +66,197 @@ class TestStatus(str, Enum):
 
 class Role(BaseModel):
     """Ansible role with wave placement and metadata."""
-    id: Optional[int] = None
+
+    id: int | None = None
     name: str
     wave: int = Field(ge=0, le=4)
-    wave_name: Optional[str] = None
-    description: Optional[str] = None
-    molecule_path: Optional[str] = None
+    wave_name: str | None = None
+    description: str | None = None
+    molecule_path: str | None = None
     has_molecule_tests: bool = False
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class RoleDependency(BaseModel):
     """Dependency relationship between roles."""
-    id: Optional[int] = None
+
+    id: int | None = None
     role_id: int
     depends_on_id: int
     dependency_type: DependencyType
-    source_file: Optional[str] = None
-    created_at: Optional[datetime] = None
+    source_file: str | None = None
+    created_at: datetime | None = None
 
 
 class Credential(BaseModel):
     """Credential requirement for a role."""
-    id: Optional[int] = None
+
+    id: int | None = None
     role_id: int
     entry_name: str
-    purpose: Optional[str] = None
+    purpose: str | None = None
     is_base58: bool = False
-    attribute: Optional[str] = None
-    source_file: Optional[str] = None
-    source_line: Optional[int] = None
-    created_at: Optional[datetime] = None
+    attribute: str | None = None
+    source_file: str | None = None
+    source_line: int | None = None
+    created_at: datetime | None = None
 
 
 class Worktree(BaseModel):
     """Git worktree for parallel development."""
-    id: Optional[int] = None
+
+    id: int | None = None
     role_id: int
     path: str
     branch: str
-    base_commit: Optional[str] = None
-    current_commit: Optional[str] = None
+    base_commit: str | None = None
+    current_commit: str | None = None
     commits_ahead: int = 0
     commits_behind: int = 0
     uncommitted_changes: int = 0
     status: WorktreeStatus = WorktreeStatus.ACTIVE
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class Iteration(BaseModel):
     """GitLab iteration."""
+
     id: int
-    title: Optional[str] = None
+    title: str | None = None
     state: str = "opened"
-    start_date: Optional[str] = None
-    due_date: Optional[str] = None
-    group_id: Optional[int] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    start_date: str | None = None
+    due_date: str | None = None
+    group_id: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class Issue(BaseModel):
     """GitLab issue."""
+
     id: int
     iid: int
-    role_id: Optional[int] = None
-    iteration_id: Optional[int] = None
+    role_id: int | None = None
+    iteration_id: int | None = None
     title: str
     state: str = "opened"
-    web_url: Optional[str] = None
-    labels: Optional[str] = None
-    assignee: Optional[str] = None
-    weight: Optional[int] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    web_url: str | None = None
+    labels: str | None = None
+    assignee: str | None = None
+    weight: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class MergeRequest(BaseModel):
     """GitLab merge request."""
+
     id: int
     iid: int
-    role_id: Optional[int] = None
-    issue_id: Optional[int] = None
+    role_id: int | None = None
+    issue_id: int | None = None
     source_branch: str
     target_branch: str = "main"
     title: str
     state: str = "opened"
-    web_url: Optional[str] = None
-    merge_status: Optional[str] = None
+    web_url: str | None = None
+    merge_status: str | None = None
     squash_on_merge: bool = True
     remove_source_branch: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class WorkflowDefinition(BaseModel):
     """DAG workflow definition."""
-    id: Optional[int] = None
+
+    id: int | None = None
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     nodes_json: str
     edges_json: str
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
 
 class WorkflowExecution(BaseModel):
     """Workflow execution instance."""
-    id: Optional[int] = None
+
+    id: int | None = None
     workflow_id: int
     role_id: int
     status: WorkflowStatus = WorkflowStatus.PENDING
-    current_node: Optional[str] = None
-    checkpoint_data: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    current_node: str | None = None
+    checkpoint_data: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class NodeExecution(BaseModel):
     """Individual node execution within a workflow."""
-    id: Optional[int] = None
+
+    id: int | None = None
     execution_id: int
     node_name: str
     status: NodeStatus = NodeStatus.PENDING
-    input_data: Optional[str] = None
-    output_data: Optional[str] = None
-    error_message: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    input_data: str | None = None
+    output_data: str | None = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     retry_count: int = 0
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
 
 class TestRun(BaseModel):
     """Test execution record."""
-    id: Optional[int] = None
+
+    id: int | None = None
     role_id: int
-    worktree_id: Optional[int] = None
-    execution_id: Optional[int] = None
+    worktree_id: int | None = None
+    execution_id: int | None = None
     test_type: TestType
     status: TestStatus
-    duration_seconds: Optional[int] = None
-    log_path: Optional[str] = None
-    output_json: Optional[str] = None
-    commit_sha: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    duration_seconds: int | None = None
+    log_path: str | None = None
+    output_json: str | None = None
+    commit_sha: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime | None = None
 
 
 class TestCase(BaseModel):
     """Individual test case result."""
-    id: Optional[int] = None
+
+    id: int | None = None
     test_run_id: int
     name: str
     status: str
-    duration_ms: Optional[int] = None
-    error_message: Optional[str] = None
-    failure_output: Optional[str] = None
-    created_at: Optional[datetime] = None
+    duration_ms: int | None = None
+    error_message: str | None = None
+    failure_output: str | None = None
+    created_at: datetime | None = None
 
 
 class RoleStatusView(BaseModel):
     """Aggregated role status from v_role_status view."""
+
     id: int
     name: str
     wave: int
-    wave_name: Optional[str] = None
-    worktree_status: Optional[str] = None
-    commits_ahead: Optional[int] = None
-    commits_behind: Optional[int] = None
-    issue_state: Optional[str] = None
-    issue_url: Optional[str] = None
-    mr_state: Optional[str] = None
-    mr_url: Optional[str] = None
+    wave_name: str | None = None
+    worktree_status: str | None = None
+    commits_ahead: int | None = None
+    commits_behind: int | None = None
+    issue_state: str | None = None
+    issue_url: str | None = None
+    mr_state: str | None = None
+    mr_url: str | None = None
     passed_tests: int = 0
     failed_tests: int = 0
 
@@ -251,6 +264,7 @@ class RoleStatusView(BaseModel):
 # ============================================================================
 # SEE/ACP CONTEXT CONTROL MODELS
 # ============================================================================
+
 
 class CapabilityStatus(str, Enum):
     ACTIVE = "active"
@@ -260,46 +274,50 @@ class CapabilityStatus(str, Enum):
 
 class ExecutionContext(BaseModel):
     """MCP client session execution context."""
-    id: Optional[int] = None
+
+    id: int | None = None
     session_id: str
-    user_id: Optional[str] = None
-    request_id: Optional[str] = None
-    capabilities: Optional[str] = None  # JSON array
-    metadata: Optional[str] = None  # JSON object
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
+    user_id: str | None = None
+    request_id: str | None = None
+    capabilities: str | None = None  # JSON array
+    metadata: str | None = None  # JSON object
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    expires_at: datetime | None = None
 
 
 class ContextCapability(BaseModel):
     """Fine-grained capability grant for a context."""
-    id: Optional[int] = None
+
+    id: int | None = None
     context_id: int
     capability: str  # e.g., 'write:roles', 'execute:molecule'
-    scope: Optional[str] = None  # Optional scope restriction
+    scope: str | None = None  # Optional scope restriction
     granted_by: str = "system"
-    granted_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    revoked_at: Optional[datetime] = None
+    granted_at: datetime | None = None
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
 
 
 class ToolInvocation(BaseModel):
     """Tool invocation tracking for telemetry."""
-    id: Optional[int] = None
-    context_id: Optional[int] = None
+
+    id: int | None = None
+    context_id: int | None = None
     tool_name: str
-    arguments: Optional[str] = None  # JSON object
-    result: Optional[str] = None  # JSON object or error
+    arguments: str | None = None  # JSON object
+    result: str | None = None  # JSON object or error
     status: str = "pending"
-    duration_ms: Optional[int] = None
-    blocked_reason: Optional[str] = None
-    created_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    duration_ms: int | None = None
+    blocked_reason: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 # ============================================================================
 # TEST REGRESSION MODELS
 # ============================================================================
+
 
 class RegressionStatus(str, Enum):
     ACTIVE = "active"
@@ -310,20 +328,21 @@ class RegressionStatus(str, Enum):
 
 class TestRegression(BaseModel):
     """Test regression tracking."""
-    id: Optional[int] = None
+
+    id: int | None = None
     role_id: int
     test_name: str
-    test_type: Optional[TestType] = None
-    first_failure_run_id: Optional[int] = None
-    resolved_run_id: Optional[int] = None
+    test_type: TestType | None = None
+    first_failure_run_id: int | None = None
+    resolved_run_id: int | None = None
     failure_count: int = 1
     consecutive_failures: int = 1
-    last_failure_at: Optional[datetime] = None
-    last_error_message: Optional[str] = None
+    last_failure_at: datetime | None = None
+    last_error_message: str | None = None
     status: RegressionStatus = RegressionStatus.ACTIVE
-    notes: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    notes: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class MergeTrainStatus(str, Enum):
@@ -336,42 +355,46 @@ class MergeTrainStatus(str, Enum):
 
 class MergeTrainEntry(BaseModel):
     """Merge train queue entry."""
-    id: Optional[int] = None
+
+    id: int | None = None
     mr_id: int
-    position: Optional[int] = None
+    position: int | None = None
     target_branch: str = "main"
     status: MergeTrainStatus = MergeTrainStatus.QUEUED
-    pipeline_id: Optional[int] = None
-    pipeline_status: Optional[str] = None
-    queued_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    failure_reason: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    pipeline_id: int | None = None
+    pipeline_status: str | None = None
+    queued_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    failure_reason: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class ActiveRegressionView(BaseModel):
     """Active regression from v_active_regressions view."""
+
     id: int
     role_name: str
     wave: int
     test_name: str
-    test_type: Optional[str] = None
+    test_type: str | None = None
     failure_count: int
     consecutive_failures: int
-    last_failure_at: Optional[datetime] = None
-    last_error_message: Optional[str] = None
+    last_failure_at: datetime | None = None
+    last_error_message: str | None = None
     status: str
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 # ============================================================================
 # AGENT SESSION MODELS (HOTL Claude Code Integration)
 # ============================================================================
 
+
 class AgentSessionStatus(str, Enum):
     """Status of a Claude Code agent session."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -382,6 +405,7 @@ class AgentSessionStatus(str, Enum):
 
 class AgentFileChangeType(str, Enum):
     """Type of file change made by an agent."""
+
     CREATE = "create"
     MODIFY = "modify"
     DELETE = "delete"
@@ -390,44 +414,47 @@ class AgentFileChangeType(str, Enum):
 
 class AgentSessionModel(BaseModel):
     """Database model for agent sessions."""
+
     id: str  # UUID string
-    execution_id: Optional[int] = None
+    execution_id: int | None = None
     task: str
     status: AgentSessionStatus = AgentSessionStatus.PENDING
-    output: Optional[str] = None
-    error_message: Optional[str] = None
-    intervention_reason: Optional[str] = None
-    context_json: Optional[str] = None
-    progress_json: Optional[str] = None
+    output: str | None = None
+    error_message: str | None = None
+    intervention_reason: str | None = None
+    context_json: str | None = None
+    progress_json: str | None = None
     working_dir: str
-    pid: Optional[int] = None
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    pid: int | None = None
+    created_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class AgentFileChange(BaseModel):
     """Database model for agent file changes."""
-    id: Optional[int] = None
+
+    id: int | None = None
     session_id: str
     file_path: str
     change_type: AgentFileChangeType
-    diff: Optional[str] = None
-    old_path: Optional[str] = None
-    created_at: Optional[datetime] = None
+    diff: str | None = None
+    old_path: str | None = None
+    created_at: datetime | None = None
 
 
 class AgentSessionView(BaseModel):
     """View model for agent sessions with computed fields."""
+
     id: str
-    execution_id: Optional[int] = None
+    execution_id: int | None = None
     task: str
     status: str
     working_dir: str
-    intervention_reason: Optional[str] = None
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    pid: Optional[int] = None
+    intervention_reason: str | None = None
+    created_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    pid: int | None = None
     file_change_count: int = 0
-    duration_seconds: Optional[float] = None
+    duration_seconds: float | None = None

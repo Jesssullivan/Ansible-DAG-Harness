@@ -10,7 +10,6 @@ Handles:
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from harness.config import HarnessConfig
 from harness.db.models import Worktree, WorktreeStatus
@@ -20,6 +19,7 @@ from harness.db.state import StateDB
 @dataclass
 class WorktreeInfo:
     """Information about a git worktree."""
+
     path: str
     branch: str
     commit: str
@@ -36,11 +36,11 @@ class WorktreeManager:
     Each role gets its own worktree at ../sid-<role> with branch sid/<role>.
     """
 
-    def __init__(self, db: StateDB, config: Optional[HarnessConfig] = None):
+    def __init__(self, db: StateDB, config: HarnessConfig | None = None):
         self.db = db
         self.config = config or HarnessConfig.load()
 
-    def _run_git(self, *args: str, cwd: Optional[str] = None) -> subprocess.CompletedProcess:
+    def _run_git(self, *args: str, cwd: str | None = None) -> subprocess.CompletedProcess:
         """Run a git command."""
         cmd = ["git"] + list(args)
         return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
@@ -79,14 +79,10 @@ class WorktreeManager:
         # Get ahead/behind counts
         ahead = behind = 0
         try:
-            ahead_result = self._run_git(
-                "rev-list", "--count", "origin/main..HEAD", cwd=path
-            )
+            ahead_result = self._run_git("rev-list", "--count", "origin/main..HEAD", cwd=path)
             ahead = int(ahead_result.stdout.strip() or 0)
 
-            behind_result = self._run_git(
-                "rev-list", "--count", "HEAD..origin/main", cwd=path
-            )
+            behind_result = self._run_git("rev-list", "--count", "HEAD..origin/main", cwd=path)
             behind = int(behind_result.stdout.strip() or 0)
         except Exception:
             pass
@@ -112,7 +108,7 @@ class WorktreeManager:
             ahead=ahead,
             behind=behind,
             uncommitted=uncommitted,
-            status=status
+            status=status,
         )
 
     def create(self, role_name: str, force: bool = False) -> WorktreeInfo:
@@ -140,19 +136,14 @@ class WorktreeManager:
         self._run_git("fetch", "origin", "main")
 
         # Create worktree with new branch from origin/main
-        result = self._run_git(
-            "worktree", "add", "-b", branch, worktree_path, "origin/main"
-        )
+        result = self._run_git("worktree", "add", "-b", branch, worktree_path, "origin/main")
 
         if result.returncode != 0:
             raise RuntimeError(f"Failed to create worktree: {result.stderr}")
 
         # Get worktree info
         info = WorktreeInfo(
-            path=worktree_path,
-            branch=branch,
-            commit="",
-            status=WorktreeStatus.ACTIVE
+            path=worktree_path, branch=branch, commit="", status=WorktreeStatus.ACTIVE
         )
 
         # Get commit SHA
@@ -172,7 +163,7 @@ class WorktreeManager:
                 branch=branch,
                 base_commit=info.commit,
                 current_commit=info.commit,
-                status=WorktreeStatus.ACTIVE
+                status=WorktreeStatus.ACTIVE,
             )
             self.db.upsert_worktree(worktree)
 
@@ -182,10 +173,7 @@ class WorktreeManager:
         """Copy essential files to worktree."""
         import shutil
 
-        essential_files = [
-            "ems.kdbx",
-            ".env.local"
-        ]
+        essential_files = ["ems.kdbx", ".env.local"]
 
         for filename in essential_files:
             src = Path(filename)
@@ -222,7 +210,7 @@ class WorktreeManager:
                 with self.db.connection() as conn:
                     conn.execute(
                         "UPDATE worktrees SET status = ? WHERE role_id = ?",
-                        (WorktreeStatus.PRUNED.value, role.id)
+                        (WorktreeStatus.PRUNED.value, role.id),
                     )
             return True
 
@@ -271,7 +259,7 @@ class WorktreeManager:
                 commits_ahead=info.ahead,
                 commits_behind=info.behind,
                 uncommitted_changes=info.uncommitted,
-                status=info.status
+                status=info.status,
             )
             self.db.upsert_worktree(worktree)
             synced += 1

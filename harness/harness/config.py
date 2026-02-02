@@ -10,7 +10,6 @@ Loads configuration from:
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -18,6 +17,7 @@ import yaml
 @dataclass
 class GitLabConfig:
     """GitLab configuration."""
+
     project_path: str = "bates-ils/projects/ems/ems-mono"
     group_path: str = "bates-ils"
     default_assignee: str = "jsullivan2"
@@ -28,6 +28,7 @@ class GitLabConfig:
 @dataclass
 class WorktreeConfig:
     """Git worktree configuration."""
+
     base_path: str = ".."
     branch_prefix: str = "sid/"
 
@@ -35,6 +36,7 @@ class WorktreeConfig:
 @dataclass
 class TestingConfig:
     """Testing configuration."""
+
     molecule_required: bool = True
     pytest_required: bool = True
     deploy_target: str = "vmnode852"
@@ -45,49 +47,96 @@ class TestingConfig:
 @dataclass
 class NotificationConfig:
     """Notification configuration."""
-    discord_webhook_url: Optional[str] = None
-    email_recipient: Optional[str] = None
-    email_from: Optional[str] = None
-    smtp_host: Optional[str] = None
-    smtp_port: Optional[int] = None
-    smtp_username: Optional[str] = None
-    smtp_password: Optional[str] = None
+
+    discord_webhook_url: str | None = None
+    email_recipient: str | None = None
+    email_from: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_username: str | None = None
+    smtp_password: str | None = None
     enabled: bool = False
+
+
+@dataclass
+class ObservabilityConfig:
+    """
+    Observability configuration for LangSmith tracing.
+
+    Environment variables:
+    - LANGCHAIN_TRACING_V2: Set to "true" to enable LangSmith tracing
+    - LANGCHAIN_PROJECT: Project name in LangSmith (default: "dag-harness")
+    - LANGCHAIN_API_KEY: LangSmith API key (required if tracing enabled)
+    - HARNESS_ANONYMIZE_SENSITIVE: Set to "false" to disable sensitive data anonymization
+    """
+
+    langsmith_enabled: bool = False  # Set from LANGCHAIN_TRACING_V2
+    langsmith_project: str = "dag-harness"  # Set from LANGCHAIN_PROJECT
+    anonymize_sensitive: bool = True  # Anonymize sensitive data before sending
+
+    @classmethod
+    def from_env(cls) -> "ObservabilityConfig":
+        """Load observability config from environment variables."""
+        return cls(
+            langsmith_enabled=os.environ.get("LANGCHAIN_TRACING_V2", "").lower() == "true",
+            langsmith_project=os.environ.get("LANGCHAIN_PROJECT", "dag-harness"),
+            anonymize_sensitive=os.environ.get("HARNESS_ANONYMIZE_SENSITIVE", "true").lower()
+            != "false",
+        )
 
 
 @dataclass
 class HarnessConfig:
     """Main harness configuration."""
+
     db_path: str = "harness.db"
     repo_root: str = "."
     gitlab: GitLabConfig = field(default_factory=GitLabConfig)
     worktree: WorktreeConfig = field(default_factory=WorktreeConfig)
     testing: TestingConfig = field(default_factory=TestingConfig)
     notifications: NotificationConfig = field(default_factory=NotificationConfig)
+    observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
 
     # Wave definitions
-    waves: dict[int, dict] = field(default_factory=lambda: {
-        0: {"name": "Foundation", "roles": ["common"]},
-        1: {
-            "name": "Infrastructure Foundation",
-            "roles": ["windows_prerequisites", "ems_registry_urls", "iis-config"]
-        },
-        2: {
-            "name": "Core Platform",
-            "roles": ["ems_platform_services", "ems_web_app", "database_clone", "ems_download_artifacts"]
-        },
-        3: {
-            "name": "Web Applications",
-            "roles": ["ems_master_calendar", "ems_master_calendar_api", "ems_campus_webservice", "ems_desktop_deploy"]
-        },
-        4: {
-            "name": "Supporting Services",
-            "roles": ["grafana_alloy_windows", "email_infrastructure", "hrtk_protected_users", "ems_environment_util"]
+    waves: dict[int, dict] = field(
+        default_factory=lambda: {
+            0: {"name": "Foundation", "roles": ["common"]},
+            1: {
+                "name": "Infrastructure Foundation",
+                "roles": ["windows_prerequisites", "ems_registry_urls", "iis-config"],
+            },
+            2: {
+                "name": "Core Platform",
+                "roles": [
+                    "ems_platform_services",
+                    "ems_web_app",
+                    "database_clone",
+                    "ems_download_artifacts",
+                ],
+            },
+            3: {
+                "name": "Web Applications",
+                "roles": [
+                    "ems_master_calendar",
+                    "ems_master_calendar_api",
+                    "ems_campus_webservice",
+                    "ems_desktop_deploy",
+                ],
+            },
+            4: {
+                "name": "Supporting Services",
+                "roles": [
+                    "grafana_alloy_windows",
+                    "email_infrastructure",
+                    "hrtk_protected_users",
+                    "ems_environment_util",
+                ],
+            },
         }
-    })
+    )
 
     @classmethod
-    def load(cls, config_path: Optional[str] = None) -> "HarnessConfig":
+    def load(cls, config_path: str | None = None) -> "HarnessConfig":
         """Load configuration from file and environment."""
         config = cls()
 
@@ -97,7 +146,7 @@ class HarnessConfig:
             "harness.yml",
             "harness.yaml",
             ".claude/skills/box-up-role/config.yml",
-            ".claude/box-up-role/config.yml"
+            ".claude/box-up-role/config.yml",
         ]
 
         for path in paths_to_try:
@@ -130,14 +179,14 @@ class HarnessConfig:
                 group_path=gl.get("group_path", config.gitlab.group_path),
                 default_assignee=gl.get("default_assignee", config.gitlab.default_assignee),
                 default_labels=gl.get("default_labels", config.gitlab.default_labels),
-                default_iteration=gl.get("default_iteration", config.gitlab.default_iteration)
+                default_iteration=gl.get("default_iteration", config.gitlab.default_iteration),
             )
 
         if "worktree" in data:
             wt = data["worktree"]
             config.worktree = WorktreeConfig(
                 base_path=wt.get("base_path", config.worktree.base_path),
-                branch_prefix=wt.get("branch_prefix", config.worktree.branch_prefix)
+                branch_prefix=wt.get("branch_prefix", config.worktree.branch_prefix),
             )
 
         if "testing" in data:
@@ -147,7 +196,7 @@ class HarnessConfig:
                 pytest_required=t.get("pytest_required", config.testing.pytest_required),
                 deploy_target=t.get("deploy_target", config.testing.deploy_target),
                 molecule_timeout=t.get("molecule_timeout", config.testing.molecule_timeout),
-                pytest_timeout=t.get("pytest_timeout", config.testing.pytest_timeout)
+                pytest_timeout=t.get("pytest_timeout", config.testing.pytest_timeout),
             )
 
         if "notifications" in data:
@@ -155,7 +204,7 @@ class HarnessConfig:
             config.notifications = NotificationConfig(
                 discord_webhook_url=n.get("discord_webhook_url"),
                 email_recipient=n.get("email_recipient"),
-                enabled=n.get("enabled", False)
+                enabled=n.get("enabled", False),
             )
 
         if "waves" in data:
@@ -182,6 +231,9 @@ class HarnessConfig:
             self.notifications.email_recipient = os.environ["EMAIL_RECIPIENT"]
             self.notifications.enabled = True
 
+        # Load observability config from environment
+        self.observability = ObservabilityConfig.from_env()
+
     def get_wave_for_role(self, role_name: str) -> tuple[int, str]:
         """Get wave number and name for a role."""
         for wave_num, wave_info in self.waves.items():
@@ -199,25 +251,30 @@ class HarnessConfig:
                 "group_path": self.gitlab.group_path,
                 "default_assignee": self.gitlab.default_assignee,
                 "default_labels": self.gitlab.default_labels,
-                "default_iteration": self.gitlab.default_iteration
+                "default_iteration": self.gitlab.default_iteration,
             },
             "worktree": {
                 "base_path": self.worktree.base_path,
-                "branch_prefix": self.worktree.branch_prefix
+                "branch_prefix": self.worktree.branch_prefix,
             },
             "testing": {
                 "molecule_required": self.testing.molecule_required,
                 "pytest_required": self.testing.pytest_required,
                 "deploy_target": self.testing.deploy_target,
                 "molecule_timeout": self.testing.molecule_timeout,
-                "pytest_timeout": self.testing.pytest_timeout
+                "pytest_timeout": self.testing.pytest_timeout,
             },
             "notifications": {
                 "discord_webhook_url": self.notifications.discord_webhook_url,
                 "email_recipient": self.notifications.email_recipient,
-                "enabled": self.notifications.enabled
+                "enabled": self.notifications.enabled,
             },
-            "waves": self.waves
+            "observability": {
+                "langsmith_enabled": self.observability.langsmith_enabled,
+                "langsmith_project": self.observability.langsmith_project,
+                "anonymize_sensitive": self.observability.anonymize_sensitive,
+            },
+            "waves": self.waves,
         }
 
     def save(self, path: str = "harness.yml") -> None:

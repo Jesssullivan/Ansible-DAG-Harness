@@ -11,16 +11,13 @@ Tests cover:
 
 import asyncio
 import json
-import tempfile
 import time
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from harness.db.state import StateDB
-from harness.hotl.state import HOTLState, HOTLPhase, create_initial_state
 from harness.hotl.agent_session import (
     AgentSession,
     AgentSessionManager,
@@ -29,12 +26,12 @@ from harness.hotl.agent_session import (
     FileChangeType,
 )
 from harness.hotl.claude_integration import (
+    AsyncHOTLClaudeIntegration,
     ClaudeAgentConfig,
     HOTLClaudeIntegration,
-    AsyncHOTLClaudeIntegration,
 )
-from harness.hotl.worker_pool import WorkerPool, Task, TaskResult
-
+from harness.hotl.state import HOTLPhase, create_initial_state
+from harness.hotl.worker_pool import Task, WorkerPool
 
 # ============================================================================
 # HOTL STATE TESTS
@@ -62,9 +59,7 @@ class TestHOTLState:
     def test_create_initial_state_custom_params(self):
         """Test creating initial state with custom parameters."""
         state = create_initial_state(
-            max_iterations=50,
-            notification_interval=60,
-            config={"test_mode": True, "verbose": True}
+            max_iterations=50, notification_interval=60, config={"test_mode": True, "verbose": True}
         )
 
         assert state["max_iterations"] == 50
@@ -227,14 +222,18 @@ class TestAgentSession:
 
     def test_add_file_change(self, session):
         """Test adding file changes to session."""
-        session.add_file_change(FileChange(
-            file_path="/path/to/file1.py",
-            change_type=FileChangeType.CREATE,
-        ))
-        session.add_file_change(FileChange(
-            file_path="/path/to/file2.py",
-            change_type=FileChangeType.MODIFY,
-        ))
+        session.add_file_change(
+            FileChange(
+                file_path="/path/to/file1.py",
+                change_type=FileChangeType.CREATE,
+            )
+        )
+        session.add_file_change(
+            FileChange(
+                file_path="/path/to/file2.py",
+                change_type=FileChangeType.MODIFY,
+            )
+        )
 
         assert len(session.file_changes) == 2
         assert session.file_changes[0].change_type == FileChangeType.CREATE
@@ -263,10 +262,12 @@ class TestAgentSession:
     def test_session_to_dict(self, session, tmp_path):
         """Test converting session to dictionary."""
         session.mark_started(pid=123)
-        session.add_file_change(FileChange(
-            file_path="/test.py",
-            change_type=FileChangeType.CREATE,
-        ))
+        session.add_file_change(
+            FileChange(
+                file_path="/test.py",
+                change_type=FileChangeType.CREATE,
+            )
+        )
 
         data = session.to_dict()
 
@@ -410,7 +411,7 @@ class TestAgentSessionManager:
     def test_get_active_sessions(self, manager, tmp_path):
         """Test getting active (running) sessions."""
         s1 = manager.create_session(task="Task 1", working_dir=tmp_path)
-        s2 = manager.create_session(task="Task 2", working_dir=tmp_path)
+        manager.create_session(task="Task 2", working_dir=tmp_path)
 
         s1.mark_started()
         manager.update_session(s1)
@@ -422,7 +423,7 @@ class TestAgentSessionManager:
     def test_get_pending_interventions(self, manager, tmp_path):
         """Test getting sessions needing intervention."""
         s1 = manager.create_session(task="Task 1", working_dir=tmp_path)
-        s2 = manager.create_session(task="Task 2", working_dir=tmp_path)
+        manager.create_session(task="Task 2", working_dir=tmp_path)
 
         s1.mark_started()
         s1.request_intervention("Need help")
@@ -472,7 +473,7 @@ class TestAgentSessionManager:
         """Test getting session statistics."""
         s1 = manager.create_session(task="Task 1", working_dir=tmp_path)
         s2 = manager.create_session(task="Task 2", working_dir=tmp_path)
-        s3 = manager.create_session(task="Task 3", working_dir=tmp_path)
+        manager.create_session(task="Task 3", working_dir=tmp_path)
 
         s1.mark_started()
         s1.mark_completed()
@@ -595,7 +596,7 @@ class TestHOTLClaudeIntegration:
             on_progress=on_progress,
         )
 
-        session = integration.spawn_agent(
+        integration.spawn_agent(
             task="Test task",
             working_dir=tmp_path,
         )
@@ -660,7 +661,7 @@ class TestHOTLClaudeIntegration:
         # Wait for process to be registered
         time.sleep(0.2)
 
-        result = integration.terminate_agent(session.id, "User cancelled")
+        integration.terminate_agent(session.id, "User cancelled")
 
         # Note: result depends on timing - process may have finished already
         # Just verify the method doesn't crash
@@ -692,7 +693,7 @@ class TestHOTLClaudeIntegration:
         assert len(active) == 0
 
         # Spawn an agent
-        session = integration.spawn_agent(task="Task 1", working_dir=tmp_path)
+        integration.spawn_agent(task="Task 1", working_dir=tmp_path)
 
         # Wait a bit for status update
         time.sleep(0.1)
@@ -868,10 +869,7 @@ class TestWorkerPool:
         async def add(a, b):
             return a + b
 
-        task_id = await pool.submit_func(
-            add, 3, 4,
-            description="Add numbers"
-        )
+        task_id = await pool.submit_func(add, 3, 4, description="Add numbers")
 
         result = await pool.wait_for_result(task_id)
         assert result.success is True
@@ -1002,6 +1000,7 @@ class TestWorkerPool:
     @pytest.mark.asyncio
     async def test_submit_without_running(self, pool):
         """Test submitting task when pool not running."""
+
         async def task():
             return True
 
@@ -1092,17 +1091,20 @@ class TestMCPAgentFeedback:
     def session_in_db(self, db):
         """Create a session in the database."""
         with db.connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO agent_sessions (
                     id, task, status, progress_json, working_dir
                 ) VALUES (?, ?, ?, ?, ?)
-            """, (
-                "test-session-456",
-                "Test task",
-                "running",
-                json.dumps([]),
-                "/tmp/test",
-            ))
+            """,
+                (
+                    "test-session-456",
+                    "Test task",
+                    "running",
+                    json.dumps([]),
+                    "/tmp/test",
+                ),
+            )
         return "test-session-456"
 
     @pytest.mark.asyncio
@@ -1114,8 +1116,7 @@ class TestMCPAgentFeedback:
         with db.connection() as conn:
             # Get existing progress
             row = conn.execute(
-                "SELECT progress_json FROM agent_sessions WHERE id = ?",
-                (session_id,)
+                "SELECT progress_json FROM agent_sessions WHERE id = ?", (session_id,)
             ).fetchone()
 
             existing = json.loads(row["progress_json"]) if row["progress_json"] else []
@@ -1123,14 +1124,13 @@ class TestMCPAgentFeedback:
 
             conn.execute(
                 "UPDATE agent_sessions SET progress_json = ? WHERE id = ?",
-                (json.dumps(existing), session_id)
+                (json.dumps(existing), session_id),
             )
 
         # Verify progress was recorded
         with db.connection() as conn:
             row = conn.execute(
-                "SELECT progress_json FROM agent_sessions WHERE id = ?",
-                (session_id,)
+                "SELECT progress_json FROM agent_sessions WHERE id = ?", (session_id,)
             ).fetchone()
             progress_list = json.loads(row["progress_json"])
             assert len(progress_list) == 1
@@ -1149,14 +1149,13 @@ class TestMCPAgentFeedback:
                 SET status = 'needs_human', intervention_reason = ?
                 WHERE id = ?
                 """,
-                (reason, session_id)
+                (reason, session_id),
             )
 
         # Verify status was updated
         with db.connection() as conn:
             row = conn.execute(
-                "SELECT status, intervention_reason FROM agent_sessions WHERE id = ?",
-                (session_id,)
+                "SELECT status, intervention_reason FROM agent_sessions WHERE id = ?", (session_id,)
             ).fetchone()
             assert row["status"] == "needs_human"
             assert row["intervention_reason"] == reason
@@ -1173,14 +1172,13 @@ class TestMCPAgentFeedback:
                     session_id, file_path, change_type, diff, old_path
                 ) VALUES (?, ?, ?, ?, ?)
                 """,
-                (session_id, "/path/to/file.py", "create", None, None)
+                (session_id, "/path/to/file.py", "create", None, None),
             )
 
         # Verify file change was logged
         with db.connection() as conn:
             row = conn.execute(
-                "SELECT * FROM agent_file_changes WHERE session_id = ?",
-                (session_id,)
+                "SELECT * FROM agent_file_changes WHERE session_id = ?", (session_id,)
             ).fetchone()
             assert row["file_path"] == "/path/to/file.py"
             assert row["change_type"] == "create"
@@ -1194,14 +1192,13 @@ class TestMCPAgentFeedback:
         with db.connection() as conn:
             conn.execute(
                 "UPDATE agent_sessions SET context_json = ? WHERE id = ?",
-                (json.dumps({"role": "common", "wave": 1}), session_id)
+                (json.dumps({"role": "common", "wave": 1}), session_id),
             )
 
         # Retrieve context
         with db.connection() as conn:
             row = conn.execute(
-                "SELECT * FROM agent_sessions WHERE id = ?",
-                (session_id,)
+                "SELECT * FROM agent_sessions WHERE id = ?", (session_id,)
             ).fetchone()
 
             context = json.loads(row["context_json"]) if row["context_json"] else {}
@@ -1213,11 +1210,14 @@ class TestMCPAgentFeedback:
         """Test agent_list_sessions MCP tool logic."""
         # Add another session
         with db.connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO agent_sessions (
                     id, task, status, working_dir
                 ) VALUES (?, ?, ?, ?)
-            """, ("session-2", "Task 2", "completed", "/tmp"))
+            """,
+                ("session-2", "Task 2", "completed", "/tmp"),
+            )
 
         # List sessions
         with db.connection() as conn:
@@ -1234,16 +1234,19 @@ class TestMCPAgentFeedback:
 
         # Add file changes
         with db.connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO agent_file_changes (session_id, file_path, change_type)
                 VALUES (?, ?, ?), (?, ?, ?)
-            """, (session_id, "/file1.py", "create", session_id, "/file2.py", "modify"))
+            """,
+                (session_id, "/file1.py", "create", session_id, "/file2.py", "modify"),
+            )
 
         # Get file changes
         with db.connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM agent_file_changes WHERE session_id = ? ORDER BY created_at",
-                (session_id,)
+                (session_id,),
             ).fetchall()
 
             assert len(rows) == 2

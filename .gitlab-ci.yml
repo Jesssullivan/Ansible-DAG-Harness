@@ -39,7 +39,7 @@ test:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Lint stage - Check code quality
+# Lint stage - Check code quality (strict)
 lint:
   stage: test
   image: python:${PYTHON_VERSION}
@@ -48,8 +48,22 @@ lint:
     - pip install uv
     - cd harness
     - uv sync --extra dev
-    - uv run ruff check harness/ || true
-    - uv run ruff format --check harness/ || true
+    - uv run ruff check harness/ tests/
+    - uv run ruff format --check harness/ tests/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Property-based testing with Hypothesis
+test-pbt:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  <<: *uv-cache
+  script:
+    - pip install uv
+    - cd harness
+    - uv sync --extra dev
+    - uv run pytest -m pbt --hypothesis-show-statistics -v
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"

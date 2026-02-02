@@ -1,10 +1,8 @@
 """Notification service for HOTL mode alerts."""
 
-import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Any
 
 import httpx
 
@@ -14,13 +12,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NotificationConfig:
     """Configuration for notification channels."""
-    discord_webhook_url: Optional[str] = None
-    email_smtp_host: Optional[str] = None
+
+    discord_webhook_url: str | None = None
+    email_smtp_host: str | None = None
     email_smtp_port: int = 587
-    email_from: Optional[str] = None
-    email_to: Optional[str] = None
-    email_username: Optional[str] = None
-    email_password: Optional[str] = None
+    email_from: str | None = None
+    email_to: str | None = None
+    email_username: str | None = None
+    email_password: str | None = None
 
 
 class NotificationService:
@@ -39,8 +38,8 @@ class NotificationService:
             config: Notification configuration
         """
         self.config = config
-        self._async_client: Optional[httpx.AsyncClient] = None
-        self._sync_client: Optional[httpx.Client] = None
+        self._async_client: httpx.AsyncClient | None = None
+        self._sync_client: httpx.Client | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""
@@ -70,9 +69,9 @@ class NotificationService:
         self,
         title: str,
         description: str,
-        color: int = 0x00ff00,  # Green by default
-        fields: Optional[list[dict]] = None,
-        footer: Optional[str] = None
+        color: int = 0x00FF00,  # Green by default
+        fields: list[dict] | None = None,
+        footer: str | None = None,
     ) -> bool:
         """
         Send a Discord webhook notification.
@@ -95,7 +94,7 @@ class NotificationService:
             "title": title,
             "description": description[:4096],  # Discord limit
             "color": color,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
 
         if fields:
@@ -103,7 +102,7 @@ class NotificationService:
                 {
                     "name": f["name"][:256],
                     "value": f["value"][:1024],
-                    "inline": f.get("inline", False)
+                    "inline": f.get("inline", False),
                 }
                 for f in fields[:25]  # Discord limit
             ]
@@ -115,10 +114,7 @@ class NotificationService:
 
         try:
             client = await self._get_client()
-            response = await client.post(
-                self.config.discord_webhook_url,
-                json=payload
-            )
+            response = await client.post(self.config.discord_webhook_url, json=payload)
             response.raise_for_status()
             logger.info(f"Discord notification sent: {title}")
             return True
@@ -127,11 +123,7 @@ class NotificationService:
             return False
 
     async def send_email(
-        self,
-        subject: str,
-        body: str,
-        to: Optional[str] = None,
-        html: bool = False
+        self, subject: str, body: str, to: str | None = None, html: bool = False
     ) -> bool:
         """
         Send an email notification.
@@ -148,8 +140,9 @@ class NotificationService:
             True if sent successfully
         """
         try:
-            import aiosmtplib
             from email.message import EmailMessage
+
+            import aiosmtplib
         except ImportError:
             logger.warning("aiosmtplib not installed. Install with: pip install aiosmtplib")
             return False
@@ -180,7 +173,7 @@ class NotificationService:
                 port=self.config.email_smtp_port,
                 username=self.config.email_username,
                 password=self.config.email_password,
-                start_tls=True
+                start_tls=True,
             )
             logger.info(f"Email notification sent: {subject}")
             return True
@@ -188,11 +181,7 @@ class NotificationService:
             logger.error(f"Failed to send email notification: {e}")
             return False
 
-    async def send_status_update(
-        self,
-        state: dict,
-        summary: str
-    ) -> dict[str, bool]:
+    async def send_status_update(self, state: dict, summary: str) -> dict[str, bool]:
         """
         Send status update to all configured channels.
 
@@ -210,24 +199,29 @@ class NotificationService:
         warnings = state.get("warnings", [])
 
         if errors:
-            color = 0xff0000  # Red
+            color = 0xFF0000  # Red
         elif warnings:
-            color = 0xffff00  # Yellow
+            color = 0xFFFF00  # Yellow
         else:
-            color = 0x00ff00  # Green
+            color = 0x00FF00  # Green
 
         # Prepare fields
         fields = [
             {"name": "Phase", "value": state.get("phase", "unknown"), "inline": True},
-            {"name": "Iteration", "value": f"{state.get('iteration_count', 0)}/{state.get('max_iterations', 0)}", "inline": True},
-            {"name": "Tasks", "value": f"Done: {len(state.get('completed_tasks', []))}, Failed: {len(state.get('failed_tasks', []))}", "inline": True},
+            {
+                "name": "Iteration",
+                "value": f"{state.get('iteration_count', 0)}/{state.get('max_iterations', 0)}",
+                "inline": True,
+            },
+            {
+                "name": "Tasks",
+                "value": f"Done: {len(state.get('completed_tasks', []))}, Failed: {len(state.get('failed_tasks', []))}",
+                "inline": True,
+            },
         ]
 
         if errors:
-            fields.append({
-                "name": "Recent Errors",
-                "value": "\n".join(errors[-3:])[:1024]
-            })
+            fields.append({"name": "Recent Errors", "value": "\n".join(errors[-3:])[:1024]})
 
         # Send Discord
         if self.config.discord_webhook_url:
@@ -236,7 +230,7 @@ class NotificationService:
                 description=summary[:4000],
                 color=color,
                 fields=fields,
-                footer="EMS Harness HOTL Mode"
+                footer="EMS Harness HOTL Mode",
             )
 
         # Send Email
@@ -247,16 +241,16 @@ HOTL Status Update
 
 {summary}
 
-Phase: {state.get('phase', 'unknown')}
-Iteration: {state.get('iteration_count', 0)}/{state.get('max_iterations', 0)}
-Completed Tasks: {len(state.get('completed_tasks', []))}
-Failed Tasks: {len(state.get('failed_tasks', []))}
+Phase: {state.get("phase", "unknown")}
+Iteration: {state.get("iteration_count", 0)}/{state.get("max_iterations", 0)}
+Completed Tasks: {len(state.get("completed_tasks", []))}
+Failed Tasks: {len(state.get("failed_tasks", []))}
 
 Errors:
-{chr(10).join(errors[-5:]) if errors else 'None'}
+{chr(10).join(errors[-5:]) if errors else "None"}
 
 Warnings:
-{chr(10).join(warnings[-5:]) if warnings else 'None'}
+{chr(10).join(warnings[-5:]) if warnings else "None"}
 
 ---
 EMS Harness HOTL Mode
@@ -264,7 +258,7 @@ EMS Harness HOTL Mode
 
             results["email"] = await self.send_email(
                 subject=f"[HOTL] Status Update - Iteration {state.get('iteration_count', 0)}",
-                body=email_body
+                body=email_body,
             )
 
         return results
@@ -273,9 +267,9 @@ EMS Harness HOTL Mode
         self,
         title: str,
         description: str,
-        color: int = 0x00ff00,
-        fields: Optional[list[dict]] = None,
-        footer: Optional[str] = None
+        color: int = 0x00FF00,
+        fields: list[dict] | None = None,
+        footer: str | None = None,
     ) -> bool:
         """
         Send a Discord webhook notification synchronously.
@@ -298,7 +292,7 @@ EMS Harness HOTL Mode
             "title": title,
             "description": description[:4096],
             "color": color,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
 
         if fields:
@@ -306,7 +300,7 @@ EMS Harness HOTL Mode
                 {
                     "name": f["name"][:256],
                     "value": f["value"][:1024],
-                    "inline": f.get("inline", False)
+                    "inline": f.get("inline", False),
                 }
                 for f in fields[:25]
             ]
@@ -318,10 +312,7 @@ EMS Harness HOTL Mode
 
         try:
             client = self._get_sync_client()
-            response = client.post(
-                self.config.discord_webhook_url,
-                json=payload
-            )
+            response = client.post(self.config.discord_webhook_url, json=payload)
             response.raise_for_status()
             logger.info(f"Discord notification sent: {title}")
             return True
@@ -329,11 +320,7 @@ EMS Harness HOTL Mode
             logger.error(f"Failed to send Discord notification: {e}")
             return False
 
-    def send_status_update_sync(
-        self,
-        state: dict,
-        summary: str
-    ) -> dict[str, bool]:
+    def send_status_update_sync(self, state: dict, summary: str) -> dict[str, bool]:
         """
         Send status update to all configured channels synchronously.
 
@@ -351,24 +338,31 @@ EMS Harness HOTL Mode
         warnings = state.get("warnings", [])
 
         if errors:
-            color = 0xff0000  # Red
+            color = 0xFF0000  # Red
         elif warnings:
-            color = 0xffff00  # Yellow
+            color = 0xFFFF00  # Yellow
         else:
-            color = 0x00ff00  # Green
+            color = 0x00FF00  # Green
 
         # Prepare fields
         fields = [
             {"name": "Phase", "value": str(state.get("phase", "unknown")), "inline": True},
-            {"name": "Iteration", "value": f"{state.get('iteration_count', 0)}/{state.get('max_iterations', 0)}", "inline": True},
-            {"name": "Tasks", "value": f"Done: {len(state.get('completed_tasks', []))}, Failed: {len(state.get('failed_tasks', []))}", "inline": True},
+            {
+                "name": "Iteration",
+                "value": f"{state.get('iteration_count', 0)}/{state.get('max_iterations', 0)}",
+                "inline": True,
+            },
+            {
+                "name": "Tasks",
+                "value": f"Done: {len(state.get('completed_tasks', []))}, Failed: {len(state.get('failed_tasks', []))}",
+                "inline": True,
+            },
         ]
 
         if errors:
-            fields.append({
-                "name": "Recent Errors",
-                "value": "\n".join(str(e) for e in errors[-3:])[:1024]
-            })
+            fields.append(
+                {"name": "Recent Errors", "value": "\n".join(str(e) for e in errors[-3:])[:1024]}
+            )
 
         # Send Discord
         if self.config.discord_webhook_url:
@@ -377,7 +371,7 @@ EMS Harness HOTL Mode
                 description=summary[:4000],
                 color=color,
                 fields=fields,
-                footer="EMS Harness HOTL Mode"
+                footer="EMS Harness HOTL Mode",
             )
 
         # Email sending would need smtplib for sync - omit for now
@@ -389,7 +383,7 @@ EMS Harness HOTL Mode
         self,
         title: str,
         message: str,
-        severity: str = "warning"  # "info", "warning", "error", "critical"
+        severity: str = "warning",  # "info", "warning", "error", "critical"
     ) -> dict[str, bool]:
         """
         Send an alert to all configured channels.
@@ -404,27 +398,19 @@ EMS Harness HOTL Mode
         """
         results = {}
 
-        color_map = {
-            "info": 0x0099ff,
-            "warning": 0xffff00,
-            "error": 0xff0000,
-            "critical": 0x990000
-        }
-        color = color_map.get(severity, 0xffffff)
+        color_map = {"info": 0x0099FF, "warning": 0xFFFF00, "error": 0xFF0000, "critical": 0x990000}
+        color = color_map.get(severity, 0xFFFFFF)
 
         # Send Discord
         if self.config.discord_webhook_url:
             results["discord"] = await self.send_discord(
-                title=f"[{severity.upper()}] {title}",
-                description=message,
-                color=color
+                title=f"[{severity.upper()}] {title}", description=message, color=color
             )
 
         # Send Email
         if self.config.email_to:
             results["email"] = await self.send_email(
-                subject=f"[HOTL {severity.upper()}] {title}",
-                body=message
+                subject=f"[HOTL {severity.upper()}] {title}", body=message
             )
 
         return results

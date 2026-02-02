@@ -1,10 +1,11 @@
 """Worker pool for parallel task execution in HOTL mode."""
 
 import asyncio
-from dataclasses import dataclass, field
-from typing import Callable, Any, Optional, Awaitable
-from datetime import datetime
 import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Task:
     """A task to be executed by the worker pool."""
+
     id: int
     func: Callable[..., Awaitable[Any]]
     args: tuple = field(default_factory=tuple)
@@ -28,10 +30,11 @@ class Task:
 @dataclass
 class TaskResult:
     """Result of a task execution."""
+
     task_id: int
     success: bool
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
     completed_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -56,7 +59,7 @@ class WorkerPool:
         self.results: dict[int, TaskResult] = {}
         self.workers: list[asyncio.Task] = []
         self.running = False
-        self._semaphore: Optional[asyncio.Semaphore] = None
+        self._semaphore: asyncio.Semaphore | None = None
         self._task_counter = 0
 
     async def start(self) -> None:
@@ -87,7 +90,7 @@ class WorkerPool:
             # Wait for queue to drain
             try:
                 await asyncio.wait_for(self.task_queue.join(), timeout=60.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Timed out waiting for task queue to drain")
 
         # Cancel workers
@@ -110,11 +113,8 @@ class WorkerPool:
             try:
                 # Wait for a task with timeout to allow checking running flag
                 try:
-                    _, task = await asyncio.wait_for(
-                        self.task_queue.get(),
-                        timeout=1.0
-                    )
-                except asyncio.TimeoutError:
+                    _, task = await asyncio.wait_for(self.task_queue.get(), timeout=1.0)
+                except TimeoutError:
                     continue
 
                 # Execute the task with semaphore
@@ -126,7 +126,7 @@ class WorkerPool:
                             task_id=task.id,
                             success=True,
                             result=result,
-                            duration_seconds=(datetime.utcnow() - start_time).total_seconds()
+                            duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                         )
                         logger.debug(f"Worker {worker_id}: Task {task.id} completed")
                     except Exception as e:
@@ -134,7 +134,7 @@ class WorkerPool:
                             task_id=task.id,
                             success=False,
                             error=str(e),
-                            duration_seconds=(datetime.utcnow() - start_time).total_seconds()
+                            duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                         )
                         logger.error(f"Worker {worker_id}: Task {task.id} failed: {e}")
 
@@ -173,7 +173,7 @@ class WorkerPool:
         *args,
         priority: int = 0,
         description: str = "",
-        **kwargs
+        **kwargs,
     ) -> int:
         """
         Submit a function for execution (convenience method).
@@ -195,19 +195,15 @@ class WorkerPool:
             args=args,
             kwargs=kwargs,
             priority=priority,
-            description=description
+            description=description,
         )
         return await self.submit(task)
 
-    def get_result(self, task_id: int) -> Optional[TaskResult]:
+    def get_result(self, task_id: int) -> TaskResult | None:
         """Get the result of a completed task."""
         return self.results.get(task_id)
 
-    async def wait_for_result(
-        self,
-        task_id: int,
-        timeout: float = 60.0
-    ) -> Optional[TaskResult]:
+    async def wait_for_result(self, task_id: int, timeout: float = 60.0) -> TaskResult | None:
         """
         Wait for a specific task to complete.
 
@@ -234,7 +230,7 @@ class WorkerPool:
         """
         try:
             await asyncio.wait_for(self.task_queue.join(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError(f"Tasks did not complete within {timeout}s")
 
     def pending_count(self) -> int:
@@ -251,7 +247,8 @@ class WorkerPool:
         failed = sum(1 for r in self.results.values() if not r.success)
         avg_duration = (
             sum(r.duration_seconds for r in self.results.values()) / len(self.results)
-            if self.results else 0.0
+            if self.results
+            else 0.0
         )
 
         return {
@@ -261,5 +258,5 @@ class WorkerPool:
             "completed_tasks": self.completed_count(),
             "successful_tasks": successful,
             "failed_tasks": failed,
-            "avg_duration_seconds": avg_duration
+            "avg_duration_seconds": avg_duration,
         }

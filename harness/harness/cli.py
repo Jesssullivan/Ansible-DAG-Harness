@@ -14,28 +14,45 @@ Usage:
 
 import asyncio
 import json
-import sys
+from datetime import UTC
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
+from harness import __version__
 from harness.config import HarnessConfig
-from harness.db.state import StateDB
 from harness.dag.graph import create_box_up_role_graph
+from harness.db.state import StateDB
 from harness.gitlab.api import GitLabClient
 
+
+def version_callback(value: bool) -> None:
+    """Print version and exit."""
+    if value:
+        print(f"dag-harness {__version__}")
+        raise typer.Exit()
+
+
 app = typer.Typer(
-    name="harness",
-    help="DAG-based orchestration harness for Ansible role deployment"
+    name="harness", help="DAG-based orchestration harness for Ansible role deployment"
 )
 console = Console()
 
 
-def get_db(config: Optional[HarnessConfig] = None) -> StateDB:
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        None, "--version", "-V", callback=version_callback, is_eager=True, help="Show version"
+    ),
+) -> None:
+    """DAG-based orchestration harness for Ansible role deployment."""
+    pass
+
+
+def get_db(config: HarnessConfig | None = None) -> StateDB:
     """Get database instance."""
     cfg = config or HarnessConfig.load()
     return StateDB(cfg.db_path)
@@ -44,8 +61,12 @@ def get_db(config: Optional[HarnessConfig] = None) -> StateDB:
 @app.command("box-up-role")
 def box_up_role(
     role_name: str = typer.Argument(..., help="Name of the Ansible role"),
-    breakpoints: Optional[str] = typer.Option(None, "--breakpoints", "-b", help="Comma-separated node names to pause before"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without making changes")
+    breakpoints: str | None = typer.Option(
+        None, "--breakpoints", "-b", help="Comma-separated node names to pause before"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be done without making changes"
+    ),
 ):
     """Execute the box-up-role workflow for a role."""
     config = HarnessConfig.load()
@@ -111,7 +132,9 @@ def box_up_role(
 
 @app.command("status")
 def status(
-    role_name: Optional[str] = typer.Argument(None, help="Role name (optional, shows all if not specified)")
+    role_name: str | None = typer.Argument(
+        None, help="Role name (optional, shows all if not specified)"
+    ),
 ):
     """Show status of roles and their deployments."""
     db = get_db()
@@ -122,7 +145,9 @@ def status(
             console.print(f"[red]Role not found:[/red] {role_name}")
             raise typer.Exit(1)
 
-        console.print(f"\n[bold]{status.name}[/bold] (Wave {status.wave}: {status.wave_name or ''})")
+        console.print(
+            f"\n[bold]{status.name}[/bold] (Wave {status.wave}: {status.wave_name or ''})"
+        )
         console.print(f"  Worktree: {status.worktree_status or 'None'}")
         if status.commits_ahead or status.commits_behind:
             console.print(f"    {status.commits_ahead} ahead, {status.commits_behind} behind")
@@ -158,7 +183,7 @@ def status(
                 wt_status,
                 s.issue_state or "-",
                 s.mr_state or "-",
-                f"{s.passed_tests}/{s.passed_tests + s.failed_tests}"
+                f"{s.passed_tests}/{s.passed_tests + s.failed_tests}",
             )
 
         console.print(table)
@@ -167,8 +192,10 @@ def status(
 @app.command("sync")
 def sync(
     roles: bool = typer.Option(True, "--roles/--no-roles", help="Sync roles from filesystem"),
-    worktrees: bool = typer.Option(True, "--worktrees/--no-worktrees", help="Sync worktrees from git"),
-    gitlab: bool = typer.Option(False, "--gitlab", help="Sync issues/MRs from GitLab")
+    worktrees: bool = typer.Option(
+        True, "--worktrees/--no-worktrees", help="Sync worktrees from git"
+    ),
+    gitlab: bool = typer.Option(False, "--gitlab", help="Sync issues/MRs from GitLab"),
 ):
     """Sync state from filesystem and GitLab."""
     db = get_db()
@@ -176,6 +203,7 @@ def sync(
     if roles:
         console.print("[blue]Syncing roles from filesystem...[/blue]")
         import yaml
+
         from harness.config import HarnessConfig
 
         # Load config to get repo_root
@@ -193,12 +221,15 @@ def sync(
                 continue
 
             from harness.db.models import Role
+
             wave_num, _ = config.get_wave_for_role(role_dir.name)
             role = Role(
                 name=role_dir.name,
                 wave=wave_num,
-                molecule_path=str(role_dir / "molecule") if (role_dir / "molecule").exists() else None,
-                has_molecule_tests=(role_dir / "molecule").exists()
+                molecule_path=str(role_dir / "molecule")
+                if (role_dir / "molecule").exists()
+                else None,
+                has_molecule_tests=(role_dir / "molecule").exists(),
             )
 
             meta_path = role_dir / "meta" / "main.yml"
@@ -223,12 +254,11 @@ def sync(
     if worktrees:
         console.print("[blue]Syncing worktrees from git...[/blue]")
         import subprocess
+
         from harness.db.models import Worktree, WorktreeStatus
 
         result = subprocess.run(
-            ["git", "worktree", "list", "--porcelain"],
-            capture_output=True,
-            text=True
+            ["git", "worktree", "list", "--porcelain"], capture_output=True, text=True
         )
 
         synced = 0
@@ -246,7 +276,7 @@ def sync(
                             role_id=role.id,
                             path=wt_path,
                             branch=branch,
-                            status=WorktreeStatus.ACTIVE
+                            status=WorktreeStatus.ACTIVE,
                         )
                         db.upsert_worktree(worktree)
                         synced += 1
@@ -263,9 +293,7 @@ def sync(
 
 
 @app.command("list-roles")
-def list_roles(
-    wave: Optional[int] = typer.Option(None, "--wave", "-w", help="Filter by wave number")
-):
+def list_roles(wave: int | None = typer.Option(None, "--wave", "-w", help="Filter by wave number")):
     """List all Ansible roles."""
     db = get_db()
     roles = db.list_roles(wave=wave)
@@ -285,7 +313,7 @@ def list_roles(
             role.name,
             str(role.wave),
             "[green]✓[/green]" if role.has_molecule_tests else "[red]✗[/red]",
-            (role.description or "")[:50]
+            (role.description or "")[:50],
         )
 
     console.print(table)
@@ -295,7 +323,9 @@ def list_roles(
 def deps(
     role_name: str = typer.Argument(..., help="Name of the role"),
     reverse: bool = typer.Option(False, "--reverse", "-r", help="Show reverse dependencies"),
-    transitive: bool = typer.Option(False, "--transitive", "-t", help="Include transitive dependencies")
+    transitive: bool = typer.Option(
+        False, "--transitive", "-t", help="Include transitive dependencies"
+    ),
 ):
     """Show dependencies for a role."""
     db = get_db()
@@ -308,12 +338,12 @@ def deps(
         title = f"Dependencies of {role_name}"
 
     if not deps_list:
-        console.print(f"[yellow]No {'reverse ' if reverse else ''}dependencies found for {role_name}[/yellow]")
+        console.print(
+            f"[yellow]No {'reverse ' if reverse else ''}dependencies found for {role_name}[/yellow]"
+        )
         return
 
-    tree = Tree(f"[bold]{title}[/bold]")
-    current_depth = 0
-    current_branch = tree
+    Tree(f"[bold]{title}[/bold]")
 
     for name, depth in deps_list:
         if transitive:
@@ -325,9 +355,7 @@ def deps(
 
 
 @app.command("worktrees")
-def worktrees(
-    json_output: bool = typer.Option(False, "--json", help="Output as JSON")
-):
+def worktrees(json_output: bool = typer.Option(False, "--json", help="Output as JSON")):
     """List all git worktrees."""
     db = get_db()
     wts = db.list_worktrees()
@@ -363,7 +391,7 @@ def worktrees(
             str(wt.commits_ahead),
             str(wt.commits_behind),
             str(wt.uncommitted_changes),
-            status
+            status,
         )
 
     console.print(table)
@@ -372,11 +400,38 @@ def worktrees(
 @app.command("resume")
 def resume(
     execution_id: int = typer.Argument(..., help="Execution ID to resume"),
-    breakpoints: Optional[str] = typer.Option(None, "--breakpoints", "-b", help="Comma-separated node names to pause before")
+    approve: bool = typer.Option(
+        False, "--approve", "-a", help="Approve and continue (for HITL interrupts)"
+    ),
+    reject: bool = typer.Option(
+        False, "--reject", "-r", help="Reject and stop (for HITL interrupts)"
+    ),
+    reason: str | None = typer.Option(None, "--reason", help="Reason for rejection"),
+    breakpoints: str | None = typer.Option(
+        None, "--breakpoints", "-b", help="Comma-separated node names to pause before"
+    ),
 ):
-    """Resume a paused workflow execution."""
+    """
+    Resume a paused workflow execution.
+
+    For workflows paused at human approval nodes, use --approve or --reject:
+
+        harness resume 123 --approve          # Approve and continue to merge train
+        harness resume 123 --reject           # Reject without reason
+        harness resume 123 --reject --reason "Tests need more coverage"
+
+    For workflows paused at breakpoints, just resume:
+
+        harness resume 123                    # Continue from breakpoint
+    """
+
     config = HarnessConfig.load()
     db = get_db(config)
+
+    # Validate options
+    if approve and reject:
+        console.print("[red]Cannot use both --approve and --reject[/red]")
+        raise typer.Exit(1)
 
     # Get execution info
     with db.connection() as conn:
@@ -387,42 +442,118 @@ def resume(
             JOIN roles r ON we.role_id = r.id
             WHERE we.id = ?
             """,
-            (execution_id,)
+            (execution_id,),
         ).fetchone()
 
         if not row:
             console.print(f"[red]Execution {execution_id} not found[/red]")
             raise typer.Exit(1)
 
-        if row["status"] not in ("paused", "failed"):
+        if row["status"] not in ("paused", "failed", "running"):
             console.print(f"[yellow]Execution is {row['status']}, not resumable[/yellow]")
             raise typer.Exit(1)
 
     console.print(f"[blue]Resuming execution {execution_id} for {row['role_name']}[/blue]")
     console.print(f"  Last node: {row['current_node']}")
 
-    graph = create_box_up_role_graph(db)
+    # Handle HITL approval/rejection
+    if approve or reject:
+        if row["current_node"] != "human_approval":
+            console.print(
+                f"[yellow]Warning: Current node is '{row['current_node']}', not 'human_approval'[/yellow]"
+            )
+            console.print("[dim]--approve/--reject are for human approval nodes[/dim]")
 
-    def event_handler(event):
-        if event.event_type == "node_started":
-            console.print(f"  [blue]→[/blue] {event.node_name}")
-        elif event.event_type == "node_completed":
-            console.print(f"  [green]✓[/green] {event.node_name}")
-        elif event.event_type == "node_failed":
-            console.print(f"  [red]✗[/red] {event.node_name}: {event.data.get('error')}")
+        # Build the resume command with approval decision
+        resume_value = {"approved": approve, "reason": reason or ""}
 
-    graph.add_event_handler(event_handler)
+        if approve:
+            console.print("[green]Approving merge train...[/green]")
+        else:
+            console.print(f"[yellow]Rejecting: {reason or 'No reason given'}[/yellow]")
 
-    bp_set = set(breakpoints.split(",")) if breakpoints else None
-    result = asyncio.run(graph.execute(row["role_name"], resume_from=execution_id, breakpoints=bp_set))
-
-    if result["status"] == "completed":
-        console.print("\n[green]Workflow completed successfully![/green]")
-    elif result["status"] == "paused":
-        console.print(f"\n[yellow]Workflow paused at:[/yellow] {result.get('paused_at')}")
+        # Resume with LangGraph Command
+        asyncio.run(_resume_with_command(db, execution_id, row["role_name"], resume_value))
     else:
-        console.print(f"\n[red]Workflow failed:[/red] {result.get('error')}")
-        raise typer.Exit(1)
+        # Standard resume without HITL response
+        graph = create_box_up_role_graph(db)
+
+        def event_handler(event):
+            if event.event_type == "node_started":
+                console.print(f"  [blue]→[/blue] {event.node_name}")
+            elif event.event_type == "node_completed":
+                console.print(f"  [green]✓[/green] {event.node_name}")
+            elif event.event_type == "node_failed":
+                console.print(f"  [red]✗[/red] {event.node_name}: {event.data.get('error')}")
+
+        graph.add_event_handler(event_handler)
+
+        bp_set = set(breakpoints.split(",")) if breakpoints else None
+        result = asyncio.run(
+            graph.execute(row["role_name"], resume_from=execution_id, breakpoints=bp_set)
+        )
+
+        if result["status"] == "completed":
+            console.print("\n[green]Workflow completed successfully![/green]")
+        elif result["status"] == "paused":
+            console.print(f"\n[yellow]Workflow paused at:[/yellow] {result.get('paused_at')}")
+        else:
+            console.print(f"\n[red]Workflow failed:[/red] {result.get('error')}")
+            raise typer.Exit(1)
+
+
+async def _resume_with_command(db, execution_id: int, role_name: str, resume_value: dict):
+    """
+    Resume a workflow using LangGraph Command(resume=...) pattern.
+
+    This is used for human-in-the-loop approvals where the workflow
+    is paused at an interrupt() call.
+    """
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    from langgraph.types import Command
+
+    from harness.dag.langgraph_engine import create_box_up_role_graph, set_module_db
+    from harness.db.models import WorkflowStatus
+
+    set_module_db(db)
+
+    # Get the graph and compile with checkpointer
+    graph = create_box_up_role_graph()
+
+    # Get database path from config
+    config = HarnessConfig.load()
+    db_path = config.db_path
+
+    # Create checkpointer and compile graph
+    async with AsyncSqliteSaver.from_conn_string(db_path) as checkpointer:
+        compiled = graph.compile(checkpointer=checkpointer)
+
+        # Create thread config for this execution
+        thread_config = {"configurable": {"thread_id": str(execution_id)}}
+
+        # Resume with Command containing the approval decision
+        try:
+            result = await compiled.ainvoke(Command(resume=resume_value), config=thread_config)
+
+            # Update execution status based on result
+            if result.get("errors"):
+                error_msg = "; ".join(result.get("errors", []))
+                db.update_execution_status(
+                    execution_id, WorkflowStatus.FAILED, error_message=error_msg
+                )
+                console.print(f"\n[red]Workflow failed:[/red] {error_msg}")
+            else:
+                db.update_execution_status(execution_id, WorkflowStatus.COMPLETED)
+                console.print("\n[green]Workflow completed successfully![/green]")
+                summary = result.get("summary", {})
+                if summary:
+                    console.print(f"  MR URL: {summary.get('mr_url', 'N/A')}")
+                    console.print(f"  Merge train: {summary.get('merge_train_status', 'N/A')}")
+
+        except Exception as e:
+            db.update_execution_status(execution_id, WorkflowStatus.FAILED, error_message=str(e))
+            console.print(f"\n[red]Resume failed:[/red] {e}")
+            raise typer.Exit(1)
 
 
 @app.command("mcp-server")
@@ -437,26 +568,28 @@ def mcp_server():
 
 @app.command("init")
 def init(
-    config_path: str = typer.Option("harness.yml", "--config", "-c", help="Path to save config")
+    config_path: str = typer.Option("harness.yml", "--config", "-c", help="Path to save config"),
 ):
     """Initialize harness configuration."""
     config = HarnessConfig()
 
     # Check if we're in the right directory
     if not Path("ansible/roles").exists():
-        console.print("[yellow]Warning: ansible/roles not found. Are you in the EMS repo root?[/yellow]")
+        console.print(
+            "[yellow]Warning: ansible/roles not found. Are you in the EMS repo root?[/yellow]"
+        )
 
     config.save(config_path)
     console.print(f"[green]Configuration saved to {config_path}[/green]")
 
     # Initialize database
-    db = StateDB(config.db_path)
+    StateDB(config.db_path)
     console.print(f"[green]Database initialized at {config.db_path}[/green]")
 
 
 @app.command("graph")
 def show_graph(
-    format: str = typer.Option("text", "--format", "-f", help="Output format: text, json, mermaid")
+    format: str = typer.Option("text", "--format", "-f", help="Output format: text, json, mermaid"),
 ):
     """Show the box-up-role workflow graph."""
     db = get_db()
@@ -488,12 +621,13 @@ def show_graph(
 # SELF-CHECK COMMANDS
 # =========================================================================
 
+
 @app.command("check")
 def check(
     schema: bool = typer.Option(True, "--schema/--no-schema", help="Validate schema"),
     data: bool = typer.Option(True, "--data/--no-data", help="Validate data integrity"),
     graph: bool = typer.Option(True, "--graph/--no-graph", help="Validate dependency graph"),
-    json_output: bool = typer.Option(False, "--json", help="Output as JSON")
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Run self-checks on the harness database."""
     db = get_db()
@@ -574,7 +708,7 @@ def db_stats(json_output: bool = typer.Option(False, "--json", help="Output as J
 
 @db_app.command("reset")
 def db_reset(
-    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm reset without prompting")
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm reset without prompting"),
 ):
     """Reset database to initial state (DESTRUCTIVE)."""
     if not yes:
@@ -590,7 +724,7 @@ def db_reset(
 @db_app.command("clear")
 def db_clear(
     table: str = typer.Argument(..., help="Table to clear (audit_log, test_runs, etc.)"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm without prompting")
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm without prompting"),
 ):
     """Clear a specific table (audit_log, test_runs, workflow_executions, etc.)."""
     if not yes:
@@ -619,9 +753,7 @@ def db_vacuum():
 
 
 @db_app.command("backup")
-def db_backup(
-    output: str = typer.Argument(..., help="Backup file path")
-):
+def db_backup(output: str = typer.Argument(..., help="Backup file path")):
     """Create a backup of the database."""
     db = get_db()
     if db.backup(output):
@@ -650,7 +782,468 @@ def db_info():
     schema = db.validate_schema()
     console.print(f"[bold]Tables:[/bold] {schema['table_count']}")
     console.print(f"[bold]Indexes:[/bold] {schema['index_count']}")
-    console.print(f"[bold]Schema Valid:[/bold] {'[green]Yes[/green]' if schema['valid'] else '[red]No[/red]'}")
+    console.print(
+        f"[bold]Schema Valid:[/bold] {'[green]Yes[/green]' if schema['valid'] else '[red]No[/red]'}"
+    )
+
+
+@db_app.command("migrate-checkpoints")
+def db_migrate_checkpoints(
+    sqlite_path: str | None = typer.Option(
+        None, "--sqlite", "-s", help="SQLite database path (default: harness.db)"
+    ),
+    postgres_url: str | None = typer.Option(
+        None, "--postgres", "-p", envvar="POSTGRES_URL", help="PostgreSQL connection URL"
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm migration without prompting"),
+):
+    """Migrate LangGraph checkpoints from SQLite to PostgreSQL.
+
+    This command migrates all checkpoint data from a SQLite database to PostgreSQL.
+    Use this when transitioning from development (SQLite) to production (PostgreSQL).
+
+    The migration preserves:
+    - All checkpoint data and state
+    - Thread IDs and timestamps
+    - Checkpoint parent relationships
+
+    Examples:
+        harness db migrate-checkpoints --postgres postgresql://user:pass@localhost/db
+        harness db migrate-checkpoints -s ./dev.db -p $POSTGRES_URL
+    """
+    from harness.dag.checkpointer import is_postgres_available, migrate_sqlite_to_postgres
+
+    config = HarnessConfig.load()
+    source_path = sqlite_path or config.db_path
+
+    if not postgres_url:
+        console.print(
+            "[red]Error:[/red] PostgreSQL URL required. Set POSTGRES_URL or use --postgres"
+        )
+        raise typer.Exit(1)
+
+    if not is_postgres_available():
+        console.print("[red]Error:[/red] PostgreSQL dependencies not installed.")
+        console.print("[dim]Install with: pip install dag-harness[postgres][/dim]")
+        raise typer.Exit(1)
+
+    if not Path(source_path).exists():
+        console.print(f"[red]Error:[/red] SQLite database not found: {source_path}")
+        raise typer.Exit(1)
+
+    if not yes:
+        console.print("[bold]Migration Plan:[/bold]")
+        console.print(f"  Source: {source_path} (SQLite)")
+        console.print("  Target: PostgreSQL")
+        console.print()
+        confirm = typer.confirm("Proceed with migration?")
+        if not confirm:
+            raise typer.Abort()
+
+    console.print(f"[blue]Migrating checkpoints from {source_path} to PostgreSQL...[/blue]")
+
+    result = asyncio.run(migrate_sqlite_to_postgres(source_path, postgres_url))
+
+    if result["success"]:
+        console.print("\n[green]Migration completed successfully![/green]")
+        console.print(f"  Checkpoints migrated: {result['checkpoints_migrated']}")
+        console.print(f"  Writes migrated: {result['writes_migrated']}")
+        console.print(f"  Duration: {result['duration_seconds']:.2f}s")
+    else:
+        console.print("\n[red]Migration failed![/red]")
+        for error in result["errors"]:
+            console.print(f"  - {error}")
+        raise typer.Exit(1)
+
+
+@db_app.command("cleanup-checkpoints")
+def db_cleanup_checkpoints(
+    days: int = typer.Option(30, "--days", "-d", help="Delete checkpoints older than N days"),
+    postgres_url: str | None = typer.Option(
+        None, "--postgres", "-p", envvar="POSTGRES_URL", help="PostgreSQL connection URL"
+    ),
+    sqlite_path: str | None = typer.Option(None, "--sqlite", "-s", help="SQLite database path"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm cleanup without prompting"),
+):
+    """Clean up old LangGraph checkpoints.
+
+    Removes checkpoints older than the specified number of days while preserving
+    the most recent checkpoint for each thread (for resumability).
+
+    Examples:
+        harness db cleanup-checkpoints --days 7    # Delete checkpoints older than 7 days
+        harness db cleanup-checkpoints --postgres $POSTGRES_URL --days 30
+    """
+    from harness.dag.checkpointer import (
+        cleanup_old_checkpoints_by_url,
+        is_postgres_available,
+    )
+
+    config = HarnessConfig.load()
+
+    if not yes:
+        confirm = typer.confirm(f"Delete checkpoints older than {days} days?")
+        if not confirm:
+            raise typer.Abort()
+
+    # Determine which database to clean up
+    if postgres_url:
+        if not is_postgres_available():
+            console.print("[red]Error:[/red] PostgreSQL dependencies not installed.")
+            raise typer.Exit(1)
+
+        console.print(f"[blue]Cleaning up PostgreSQL checkpoints older than {days} days...[/blue]")
+        result = asyncio.run(cleanup_old_checkpoints_by_url(postgres_url, days))
+    elif sqlite_path:
+        # SQLite cleanup via direct SQL
+        console.print(f"[blue]Cleaning up SQLite checkpoints older than {days} days...[/blue]")
+        import sqlite3
+        from datetime import datetime, timedelta
+
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        cutoff_ts = cutoff.isoformat()
+
+        try:
+            conn = sqlite3.connect(sqlite_path)
+            cursor = conn.execute(
+                """
+                DELETE FROM checkpoints
+                WHERE thread_ts < ?
+                AND thread_id NOT IN (
+                    SELECT thread_id
+                    FROM checkpoints
+                    GROUP BY thread_id
+                    HAVING MAX(thread_ts) = thread_ts
+                )
+                """,
+                (cutoff_ts,),
+            )
+            deleted = cursor.rowcount
+            conn.commit()
+            conn.close()
+            result = {"deleted_count": deleted, "errors": []}
+        except Exception as e:
+            result = {"deleted_count": 0, "errors": [str(e)]}
+    else:
+        # Use default harness.db
+        sqlite_path = config.db_path
+        console.print(
+            f"[blue]Cleaning up checkpoints in {sqlite_path} older than {days} days...[/blue]"
+        )
+        import sqlite3
+        from datetime import datetime, timedelta
+
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        cutoff_ts = cutoff.isoformat()
+
+        try:
+            conn = sqlite3.connect(sqlite_path)
+            cursor = conn.execute(
+                """
+                DELETE FROM checkpoints
+                WHERE thread_ts < ?
+                AND thread_id NOT IN (
+                    SELECT thread_id
+                    FROM checkpoints
+                    GROUP BY thread_id
+                    HAVING MAX(thread_ts) = thread_ts
+                )
+                """,
+                (cutoff_ts,),
+            )
+            deleted = cursor.rowcount
+            conn.commit()
+            conn.close()
+            result = {"deleted_count": deleted, "errors": []}
+        except sqlite3.OperationalError:
+            # Table might not exist
+            result = {"deleted_count": 0, "errors": ["checkpoints table not found"]}
+        except Exception as e:
+            result = {"deleted_count": 0, "errors": [str(e)]}
+
+    if result["errors"]:
+        console.print("[yellow]Cleanup completed with warnings:[/yellow]")
+        for error in result["errors"]:
+            console.print(f"  - {error}")
+    else:
+        console.print(
+            f"[green]Cleanup complete. Deleted {result['deleted_count']} old checkpoints.[/green]"
+        )
+
+
+@db_app.command("check-postgres")
+def db_check_postgres(
+    postgres_url: str | None = typer.Option(
+        None, "--postgres", "-p", envvar="POSTGRES_URL", help="PostgreSQL connection URL"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Check PostgreSQL connection health for checkpointing.
+
+    Verifies:
+    - Connection to PostgreSQL server
+    - Query latency
+    - Checkpointer table existence
+    - Server version
+
+    Examples:
+        harness db check-postgres
+        harness db check-postgres --postgres postgresql://user:pass@localhost/db
+    """
+    from harness.dag.checkpointer import (
+        check_postgres_health,
+        get_postgres_url,
+        is_postgres_available,
+    )
+
+    url = postgres_url or get_postgres_url()
+
+    if not url:
+        console.print("[yellow]No PostgreSQL URL configured.[/yellow]")
+        console.print("[dim]Set POSTGRES_URL or DATABASE_URL environment variable,[/dim]")
+        console.print("[dim]or use --postgres to specify a connection URL.[/dim]")
+        if json_output:
+            print(json.dumps({"configured": False, "connected": False}))
+        raise typer.Exit(1)
+
+    if not is_postgres_available():
+        console.print("[red]PostgreSQL dependencies not installed.[/red]")
+        console.print("[dim]Install with: pip install dag-harness[postgres][/dim]")
+        if json_output:
+            print(json.dumps({"configured": True, "installed": False, "connected": False}))
+        raise typer.Exit(1)
+
+    console.print("[blue]Checking PostgreSQL connection...[/blue]")
+
+    result = asyncio.run(check_postgres_health(url))
+
+    if json_output:
+        print(json.dumps(result, indent=2))
+        if not result["connected"]:
+            raise typer.Exit(1)
+        return
+
+    if result["connected"]:
+        console.print("\n[green]PostgreSQL connection healthy![/green]")
+        console.print(f"  Latency: {result['latency_ms']:.2f}ms")
+        if result.get("version"):
+            # Truncate version string for display
+            version = result["version"]
+            if len(version) > 60:
+                version = version[:57] + "..."
+            console.print(f"  Version: {version}")
+        console.print(f"  Checkpoints: {result.get('pool_size', 'N/A')}")
+    else:
+        console.print("\n[red]PostgreSQL connection failed![/red]")
+        console.print(f"  Error: {result.get('error', 'Unknown error')}")
+        console.print(f"  Latency: {result['latency_ms']:.2f}ms")
+        raise typer.Exit(1)
+
+
+# =========================================================================
+# COSTS COMMANDS
+# =========================================================================
+
+costs_app = typer.Typer(name="costs", help="Cost tracking and reporting")
+app.add_typer(costs_app)
+
+
+@costs_app.command("report")
+def costs_report(
+    days: int = typer.Option(30, "--days", "-d", help="Days to look back"),
+    by_model: bool = typer.Option(True, "--by-model/--no-by-model", help="Show breakdown by model"),
+    by_session: bool = typer.Option(False, "--by-session", "-s", help="Show breakdown by session"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show cost breakdown by model and date.
+
+    Displays token usage and costs from the token_usage table, with
+    breakdowns by model and optionally by session.
+
+    Examples:
+        harness costs report              # Last 30 days by model
+        harness costs report --days 7     # Last 7 days
+        harness costs report --by-session # Include session breakdown
+    """
+    from datetime import datetime, timedelta
+
+    db = get_db()
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=days)
+
+    summary = db.get_cost_summary(
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+    )
+
+    if json_output:
+        print(json.dumps(summary, indent=2, default=str))
+        return
+
+    # Header
+    console.print(f"\n[bold]Cost Report[/bold] ({days} days)")
+    console.print(f"Period: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}\n")
+
+    # Totals
+    console.print(f"[bold]Total Cost:[/bold] ${summary['total_cost']:.4f}")
+    console.print(f"[bold]Total Input Tokens:[/bold] {summary['total_input_tokens']:,}")
+    console.print(f"[bold]Total Output Tokens:[/bold] {summary['total_output_tokens']:,}")
+    console.print(f"[bold]API Calls:[/bold] {summary['record_count']:,}\n")
+
+    # By model breakdown
+    if by_model and summary.get("by_model"):
+        table = Table(title="Cost by Model")
+        table.add_column("Model")
+        table.add_column("Cost", justify="right")
+        table.add_column("Input Tokens", justify="right")
+        table.add_column("Output Tokens", justify="right")
+        table.add_column("Calls", justify="right")
+
+        for model, data in sorted(
+            summary["by_model"].items(),
+            key=lambda x: x[1]["cost"],
+            reverse=True,
+        ):
+            table.add_row(
+                model,
+                f"${data['cost']:.4f}",
+                f"{data['input_tokens']:,}",
+                f"{data['output_tokens']:,}",
+                f"{data['count']:,}",
+            )
+
+        console.print(table)
+        console.print()
+
+    # By session breakdown
+    if by_session and summary.get("by_session"):
+        table = Table(title="Top Sessions by Cost")
+        table.add_column("Session ID")
+        table.add_column("Cost", justify="right")
+        table.add_column("Input Tokens", justify="right")
+        table.add_column("Output Tokens", justify="right")
+        table.add_column("Calls", justify="right")
+
+        for session_id, data in list(summary["by_session"].items())[:10]:
+            # Truncate session ID for display
+            display_id = session_id[:20] + "..." if len(session_id) > 20 else session_id
+            table.add_row(
+                display_id,
+                f"${data['cost']:.4f}",
+                f"{data['input_tokens']:,}",
+                f"{data['output_tokens']:,}",
+                f"{data['count']:,}",
+            )
+
+        console.print(table)
+
+
+@costs_app.command("daily")
+def costs_daily(
+    days: int = typer.Option(14, "--days", "-d", help="Days to show"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show daily cost breakdown.
+
+    Displays costs aggregated by day for trend analysis.
+    """
+    from harness.costs.tracker import TokenUsageTracker
+
+    db = get_db()
+    tracker = TokenUsageTracker(db)
+    daily = tracker.get_daily_costs(days=days)
+
+    if json_output:
+        # Convert Decimal to float for JSON
+        for d in daily:
+            d["total_cost"] = float(d["total_cost"])
+        print(json.dumps(daily, indent=2))
+        return
+
+    if not daily:
+        console.print("[yellow]No cost data found.[/yellow]")
+        return
+
+    table = Table(title=f"Daily Costs (Last {days} Days)")
+    table.add_column("Date")
+    table.add_column("Cost", justify="right")
+    table.add_column("Input Tokens", justify="right")
+    table.add_column("Output Tokens", justify="right")
+    table.add_column("Calls", justify="right")
+
+    for day in daily:
+        table.add_row(
+            str(day["date"]),
+            f"${float(day['total_cost']):.4f}",
+            f"{day['total_input_tokens']:,}",
+            f"{day['total_output_tokens']:,}",
+            f"{day['record_count']:,}",
+        )
+
+    console.print(table)
+
+
+@costs_app.command("session")
+def costs_session(
+    session_id: str = typer.Argument(..., help="Session ID to query"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show costs for a specific session."""
+    db = get_db()
+    summary = db.get_session_costs(session_id)
+
+    if json_output:
+        print(json.dumps(summary, indent=2, default=str))
+        return
+
+    if summary["record_count"] == 0:
+        console.print(f"[yellow]No cost data found for session: {session_id}[/yellow]")
+        return
+
+    console.print(f"\n[bold]Session:[/bold] {session_id}")
+    console.print(f"[bold]Total Cost:[/bold] ${summary['total_cost']:.4f}")
+    console.print(f"[bold]Input Tokens:[/bold] {summary['total_input_tokens']:,}")
+    console.print(f"[bold]Output Tokens:[/bold] {summary['total_output_tokens']:,}")
+    console.print(f"[bold]API Calls:[/bold] {summary['record_count']:,}\n")
+
+    if summary.get("by_model"):
+        table = Table(title="Breakdown by Model")
+        table.add_column("Model")
+        table.add_column("Cost", justify="right")
+        table.add_column("Input", justify="right")
+        table.add_column("Output", justify="right")
+
+        for model, data in summary["by_model"].items():
+            table.add_row(
+                model,
+                f"${data['cost']:.4f}",
+                f"{data['input_tokens']:,}",
+                f"{data['output_tokens']:,}",
+            )
+
+        console.print(table)
+
+
+@costs_app.command("pricing")
+def costs_pricing():
+    """Show current model pricing information."""
+    from harness.costs.pricing import CLAUDE_PRICING
+
+    table = Table(title="Claude Model Pricing (per 1M tokens)")
+    table.add_column("Model ID")
+    table.add_column("Display Name")
+    table.add_column("Input", justify="right")
+    table.add_column("Output", justify="right")
+
+    for model_id, pricing in sorted(CLAUDE_PRICING.items()):
+        table.add_row(
+            model_id,
+            pricing.display_name,
+            f"${pricing.input_cost_per_mtok:.2f}",
+            f"${pricing.output_cost_per_mtok:.2f}",
+        )
+
+    console.print(table)
 
 
 # =========================================================================
@@ -677,15 +1270,17 @@ def metrics_status(json_output: bool = typer.Option(False, "--json", help="Outpu
     # Overall health header
     overall = health["overall"]
     if overall == "healthy":
-        console.print(f"\n[bold green]Overall Health: HEALTHY[/bold green]")
+        console.print("\n[bold green]Overall Health: HEALTHY[/bold green]")
     elif overall == "warning":
-        console.print(f"\n[bold yellow]Overall Health: WARNING[/bold yellow]")
+        console.print("\n[bold yellow]Overall Health: WARNING[/bold yellow]")
     elif overall == "critical":
-        console.print(f"\n[bold red]Overall Health: CRITICAL[/bold red]")
+        console.print("\n[bold red]Overall Health: CRITICAL[/bold red]")
     else:
-        console.print(f"\n[bold dim]Overall Health: UNKNOWN[/bold dim]")
+        console.print("\n[bold dim]Overall Health: UNKNOWN[/bold dim]")
 
-    console.print(f"  OK: {health['ok']} | Warning: {health['warning']} | Critical: {health['critical']} | Unknown: {health['unknown']}\n")
+    console.print(
+        f"  OK: {health['ok']} | Warning: {health['warning']} | Critical: {health['critical']} | Unknown: {health['unknown']}\n"
+    )
 
     # Individual metrics table
     table = Table(title="Golden Metrics Status")
@@ -715,7 +1310,7 @@ def metrics_status(json_output: bool = typer.Option(False, "--json", help="Outpu
 def metrics_record(
     name: str = typer.Argument(..., help="Metric name"),
     value: float = typer.Argument(..., help="Metric value"),
-    context: Optional[str] = typer.Option(None, "--context", "-c", help="JSON context metadata")
+    context: str | None = typer.Option(None, "--context", "-c", help="JSON context metadata"),
 ):
     """Record a metric value."""
     from harness.metrics.golden import GoldenMetricsTracker
@@ -743,7 +1338,7 @@ def metrics_record(
 def metrics_history(
     name: str = typer.Argument(..., help="Metric name"),
     hours: int = typer.Option(24, "--hours", "-h", help="Hours to look back"),
-    limit: int = typer.Option(20, "--limit", "-n", help="Maximum entries to show")
+    limit: int = typer.Option(20, "--limit", "-n", help="Maximum entries to show"),
 ):
     """Show recent history for a metric."""
     from harness.metrics.golden import GoldenMetricsTracker
@@ -781,7 +1376,7 @@ def metrics_history(
             timestamp,
             f"{value:.3f}",
             f"{baseline:.3f}" if baseline is not None else "-",
-            status_str
+            status_str,
         )
 
     console.print(table)
@@ -793,7 +1388,7 @@ def metrics_history(
 @metrics_app.command("trend")
 def metrics_trend(
     name: str = typer.Argument(..., help="Metric name"),
-    hours: int = typer.Option(24, "--hours", "-h", help="Hours to analyze")
+    hours: int = typer.Option(24, "--hours", "-h", help="Hours to analyze"),
 ):
     """Show trend analysis for a metric."""
     from harness.metrics.golden import GoldenMetricsTracker
@@ -815,13 +1410,13 @@ def metrics_trend(
 
     trend_str = trend["trend"]
     if trend_str == "increasing":
-        console.print(f"  Trend:   [red]↑ Increasing[/red]")
+        console.print("  Trend:   [red]↑ Increasing[/red]")
     elif trend_str == "decreasing":
-        console.print(f"  Trend:   [green]↓ Decreasing[/green]")
+        console.print("  Trend:   [green]↓ Decreasing[/green]")
     elif trend_str == "stable":
-        console.print(f"  Trend:   [blue]→ Stable[/blue]")
+        console.print("  Trend:   [blue]→ Stable[/blue]")
     else:
-        console.print(f"  Trend:   [dim]? Unknown[/dim]")
+        console.print("  Trend:   [dim]? Unknown[/dim]")
 
 
 @metrics_app.command("list")
@@ -848,7 +1443,7 @@ def metrics_list():
             f"{m.baseline_value:.2f}",
             f"{m.warning_threshold:.2f}x",
             f"{m.critical_threshold:.2f}x",
-            m.unit or "-"
+            m.unit or "-",
         )
 
     console.print(table)
@@ -857,7 +1452,7 @@ def metrics_list():
 @metrics_app.command("purge")
 def metrics_purge(
     days: int = typer.Option(30, "--days", "-d", help="Purge records older than N days"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm without prompting")
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm without prompting"),
 ):
     """Purge old metric records."""
     from harness.metrics.golden import GoldenMetricsTracker
@@ -884,10 +1479,16 @@ app.add_typer(hotl_app)
 @hotl_app.command("start")
 def hotl_start(
     max_iterations: int = typer.Option(100, "--max-iterations", "-n", help="Maximum iterations"),
-    notify_interval: int = typer.Option(300, "--notify-interval", "-i", help="Seconds between notifications"),
-    discord_webhook: Optional[str] = typer.Option(None, "--discord", envvar="DISCORD_WEBHOOK_URL", help="Discord webhook URL"),
-    email_to: Optional[str] = typer.Option(None, "--email", envvar="HOTL_EMAIL_TO", help="Email recipient"),
-    background: bool = typer.Option(False, "--background", "-b", help="Run in background")
+    notify_interval: int = typer.Option(
+        300, "--notify-interval", "-i", help="Seconds between notifications"
+    ),
+    discord_webhook: str | None = typer.Option(
+        None, "--discord", envvar="DISCORD_WEBHOOK_URL", help="Discord webhook URL"
+    ),
+    email_to: str | None = typer.Option(
+        None, "--email", envvar="HOTL_EMAIL_TO", help="Email recipient"
+    ),
+    background: bool = typer.Option(False, "--background", "-b", help="Run in background"),
 ):
     """Start HOTL autonomous operation mode."""
     from harness.hotl.supervisor import HOTLSupervisor
@@ -902,7 +1503,7 @@ def hotl_start(
 
     supervisor = HOTLSupervisor(db, config=config)
 
-    console.print(f"[bold blue]Starting HOTL Mode[/bold blue]")
+    console.print("[bold blue]Starting HOTL Mode[/bold blue]")
     console.print(f"  Max iterations: {max_iterations}")
     console.print(f"  Notify interval: {notify_interval}s")
     console.print(f"  Discord: {'configured' if discord_webhook else 'not configured'}")
@@ -910,13 +1511,14 @@ def hotl_start(
     console.print()
 
     if background:
-        console.print("[yellow]Background mode not yet implemented. Running in foreground.[/yellow]")
+        console.print(
+            "[yellow]Background mode not yet implemented. Running in foreground.[/yellow]"
+        )
 
     try:
         # Run synchronously - supervisor.run() is now sync
         final_state = supervisor.run(
-            max_iterations=max_iterations,
-            notification_interval=notify_interval
+            max_iterations=max_iterations, notification_interval=notify_interval
         )
 
         console.print("\n[bold green]HOTL completed[/bold green]")
@@ -935,9 +1537,7 @@ def hotl_start(
 
 
 @hotl_app.command("status")
-def hotl_status(
-    json_output: bool = typer.Option(False, "--json", help="Output as JSON")
-):
+def hotl_status(json_output: bool = typer.Option(False, "--json", help="Output as JSON")):
     """Show current HOTL status from database."""
     db = get_db()
 
@@ -964,15 +1564,19 @@ def hotl_status(
     console.print(f"  Total roles: {status_info['roles_count']}")
     console.print(f"  Test runs recorded: {status_info['test_runs']}")
 
-    if status_info['running_executions'] > 0:
-        console.print("\n[yellow]Note: HOTL may be running. Use Ctrl+C to stop if in foreground.[/yellow]")
+    if status_info["running_executions"] > 0:
+        console.print(
+            "\n[yellow]Note: HOTL may be running. Use Ctrl+C to stop if in foreground.[/yellow]"
+        )
     else:
         console.print("\n[dim]No active HOTL session detected.[/dim]")
 
 
 @hotl_app.command("stop")
 def hotl_stop(
-    force: bool = typer.Option(False, "--force", "-f", help="Force stop (cancel running executions)")
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Force stop (cancel running executions)"
+    ),
 ):
     """Request HOTL to stop gracefully."""
     db = get_db()
@@ -980,10 +1584,11 @@ def hotl_stop(
     if force:
         # Cancel any running executions in the database
         from harness.db.models import WorkflowStatus
+
         with db.connection() as conn:
             count = conn.execute(
                 "UPDATE workflow_executions SET status = ? WHERE status = ?",
-                (WorkflowStatus.CANCELLED.value, WorkflowStatus.RUNNING.value)
+                (WorkflowStatus.CANCELLED.value, WorkflowStatus.RUNNING.value),
             ).rowcount
         if count > 0:
             console.print(f"[yellow]Cancelled {count} running execution(s)[/yellow]")
@@ -998,7 +1603,7 @@ def hotl_stop(
 def hotl_resume(
     thread_id: str = typer.Argument(..., help="Thread ID to resume from checkpoint"),
     max_iterations: int = typer.Option(100, "--max-iterations", "-n"),
-    notify_interval: int = typer.Option(300, "--notify-interval", "-i")
+    notify_interval: int = typer.Option(300, "--notify-interval", "-i"),
 ):
     """Resume HOTL from a checkpoint."""
     from harness.hotl.supervisor import HOTLSupervisor
@@ -1013,7 +1618,7 @@ def hotl_resume(
         final_state = supervisor.run(
             max_iterations=max_iterations,
             notification_interval=notify_interval,
-            resume_from=thread_id
+            resume_from=thread_id,
         )
 
         console.print("\n[bold green]HOTL resumed and completed[/bold green]")
@@ -1037,8 +1642,10 @@ app.add_typer(install_app)
 def install_run(
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
     skip_hooks: bool = typer.Option(False, "--skip-hooks", help="Don't install hook scripts"),
-    skip_skills: bool = typer.Option(False, "--skip-skills", help="Don't install skill definitions"),
-    skip_mcp: bool = typer.Option(False, "--skip-mcp", help="Don't configure MCP server")
+    skip_skills: bool = typer.Option(
+        False, "--skip-skills", help="Don't install skill definitions"
+    ),
+    skip_mcp: bool = typer.Option(False, "--skip-mcp", help="Don't configure MCP server"),
 ):
     """Install harness into MCP client.
 
@@ -1051,10 +1658,7 @@ def install_run(
 
     installer = MCPInstaller()
     result = installer.install(
-        force=force,
-        skip_hooks=skip_hooks,
-        skip_skills=skip_skills,
-        skip_mcp=skip_mcp
+        force=force, skip_hooks=skip_hooks, skip_skills=skip_skills, skip_mcp=skip_mcp
     )
 
     print_install_result(result)
@@ -1073,7 +1677,7 @@ def install_check():
     - Required hook scripts
     - Skill definitions
     """
-    from harness.install import MCPInstaller, InstallStatus, print_check_result
+    from harness.install import InstallStatus, MCPInstaller, print_check_result
 
     installer = MCPInstaller()
     status, components = installer.check()
@@ -1093,7 +1697,7 @@ def install_check():
 @install_app.command("uninstall")
 def install_uninstall(
     yes: bool = typer.Option(False, "--yes", "-y", help="Confirm without prompting"),
-    remove_data: bool = typer.Option(False, "--remove-data", help="Also remove data files")
+    remove_data: bool = typer.Option(False, "--remove-data", help="Also remove data files"),
 ):
     """Remove harness from MCP client.
 
@@ -1142,10 +1746,13 @@ def install_upgrade():
 # CREDENTIAL Commands
 # =============================================================================
 
+
 @app.command("scan-tokens")
 def scan_tokens_cmd(
     save: bool = typer.Option(False, "--save", "-s", help="Save first valid token to .env file"),
-    env_file: Optional[str] = typer.Option(None, "--env-file", "-e", help="Target .env file path (default: project .env)")
+    env_file: str | None = typer.Option(
+        None, "--env-file", "-e", help="Target .env file path (default: project .env)"
+    ),
 ):
     """Scan local .env files for GitLab tokens and test them.
 
@@ -1216,7 +1823,7 @@ def scan_tokens_cmd(
             r["token_prefix"],
             valid_str,
             user_str,
-            scopes_str[:20] + "..." if len(scopes_str) > 20 else scopes_str
+            scopes_str[:20] + "..." if len(scopes_str) > 20 else scopes_str,
         )
 
         if r["valid"] and first_valid is None:
@@ -1241,10 +1848,10 @@ def scan_tokens_cmd(
         if first_valid["source"] == "[env]" or first_valid["source"].startswith("env:"):
             # From environment
             import os
+
             actual_token = os.environ.get(var_to_find)
         else:
             # Read from file - need to handle 'export VAR=' format
-            import re
             try:
                 with open(first_valid["source"]) as f:
                     for line in f:
@@ -1268,13 +1875,17 @@ def scan_tokens_cmd(
             if discovery.save_credential_to_env("GITLAB_TOKEN", actual_token, target_file):
                 target_path = target_file or (discovery.project_root / ".env")
                 console.print(f"\n[green]Saved valid token to {target_path}[/green]")
-                console.print(f"[dim]Token from: {first_valid['var_name']} ({first_valid['username']})[/dim]")
+                console.print(
+                    f"[dim]Token from: {first_valid['var_name']} ({first_valid['username']})[/dim]"
+                )
             else:
                 console.print("\n[red]Failed to save token to .env file[/red]")
                 raise typer.Exit(1)
         else:
             console.print("\n[red]Could not retrieve token value for saving[/red]")
-            console.print(f"[dim]Looking for var '{var_to_find}' with prefix '{token_prefix}' in {first_valid['source']}[/dim]")
+            console.print(
+                f"[dim]Looking for var '{var_to_find}' with prefix '{token_prefix}' in {first_valid['source']}[/dim]"
+            )
             raise typer.Exit(1)
     elif save and not first_valid:
         console.print("\n[yellow]No valid token found to save.[/yellow]")
@@ -1282,13 +1893,175 @@ def scan_tokens_cmd(
 
 
 # =============================================================================
+# CREDENTIALS Command
+# =============================================================================
+
+
+@app.command("credentials")
+def credentials_cmd(
+    prompt: bool = typer.Option(False, "--prompt", "-p", help="Prompt for missing credentials"),
+    save: bool = typer.Option(False, "--save", "-s", help="Save entered credentials to .env"),
+    validate: bool = typer.Option(
+        True, "--validate/--no-validate", help="Validate discovered credentials"
+    ),
+    env_file: str | None = typer.Option(
+        None, "--env-file", "-e", help="Target .env file for saving"
+    ),
+):
+    """Discover and validate all credentials.
+
+    This command searches for credentials in multiple locations:
+    - Environment variables
+    - .env files (project, home, config directories)
+    - glab CLI configuration
+    - macOS Keychain
+
+    It validates discovered credentials against their respective services
+    (GitLab API, Anthropic, Discord, etc.) with configurable timeouts.
+
+    Examples:
+        harness credentials                # Discover and validate
+        harness credentials --prompt       # Prompt for missing required
+        harness credentials --save         # Save to .env
+        harness credentials --no-validate  # Skip validation
+    """
+    import asyncio
+
+    from harness.bootstrap.discovery import KeyDiscovery
+    from harness.bootstrap.prompts import CredentialPrompts
+    from harness.bootstrap.validation import CredentialValidator, ValidationStatus
+
+    console.print("[bold]Credential Discovery[/bold]\n")
+
+    # Discover credentials
+    discovery = KeyDiscovery()
+    keys = discovery.discover_all()
+
+    # Display results
+    prompts = CredentialPrompts(console)
+    prompts.display_discovery_results(keys, show_values=True)
+
+    # Validate if requested
+    if validate:
+        console.print("\n[bold]Validating credentials...[/bold]\n")
+
+        validator = CredentialValidator()
+        validation_results = asyncio.run(validator.validate_all(keys))
+        prompts.display_validation_results(validation_results)
+
+        # Check for invalid credentials
+        invalid = [
+            name
+            for name, result in validation_results.items()
+            if result.status == ValidationStatus.INVALID
+        ]
+        if invalid:
+            console.print(f"\n[red]Invalid credentials: {', '.join(invalid)}[/red]")
+
+    # Prompt for missing if requested
+    if prompt:
+        from harness.bootstrap.discovery import KeyStatus
+
+        missing = {name: info for name, info in keys.items() if info.status != KeyStatus.FOUND}
+
+        if missing:
+            console.print("\n[bold]Configure missing credentials:[/bold]")
+            entered = prompts.prompt_for_missing(keys, required_only=not save)
+
+            if entered and save:
+                target = Path(env_file) if env_file else Path.cwd() / ".env"
+                if prompts.confirm_save(entered, target):
+                    prompts.save_to_env(entered, target)
+        else:
+            console.print("\n[green]All credentials found![/green]")
+
+    # Summary
+    from harness.bootstrap.discovery import KeyStatus
+
+    found = sum(1 for info in keys.values() if info.status == KeyStatus.FOUND)
+    total = len(keys)
+    console.print(f"\n[dim]Found {found}/{total} credentials[/dim]")
+
+
+# =============================================================================
+# UPGRADE Command
+# =============================================================================
+
+
+@app.command("upgrade")
+def upgrade_cmd(
+    check: bool = typer.Option(False, "--check", "-c", help="Check only, don't install"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force upgrade even if up to date"),
+):
+    """Check for and install dag-harness updates.
+
+    Checks PyPI and GitHub releases for newer versions and upgrades
+    using the same method that was used for initial installation
+    (uv, pip, pipx, or binary).
+
+    Examples:
+        harness upgrade         # Check and install if available
+        harness upgrade --check # Check only
+        harness upgrade --force # Force reinstall
+    """
+    from harness import __version__
+    from harness.bootstrap.upgrade import (
+        UpgradeStatus,
+        check_for_upgrade,
+        upgrade,
+    )
+
+    console.print("[bold]dag-harness upgrade[/bold]")
+    console.print(f"Current version: {__version__}\n")
+
+    # Check for updates
+    version_info = check_for_upgrade()
+
+    if version_info.upgrade_available:
+        console.print(f"[green]New version available: {version_info.latest}[/green]")
+        console.print(f"Source: {version_info.source}")
+
+        if check:
+            console.print("\n[dim]Run 'harness upgrade' to install.[/dim]")
+            return
+
+        console.print("\n[bold]Upgrading...[/bold]")
+        result = upgrade(check_only=False)
+
+        if result.status == UpgradeStatus.UPGRADED:
+            console.print(f"\n[green]Successfully upgraded to {result.new_version}[/green]")
+        else:
+            console.print(f"\n[red]Upgrade failed: {result.message}[/red]")
+            if result.error:
+                console.print(f"[dim]{result.error}[/dim]")
+            raise typer.Exit(1)
+
+    elif force:
+        console.print("[yellow]Forcing reinstall...[/yellow]")
+        result = upgrade(check_only=False)
+
+        if result.status == UpgradeStatus.UPGRADED:
+            console.print(f"\n[green]Reinstalled version {result.new_version}[/green]")
+        else:
+            console.print(f"\n[red]Reinstall failed: {result.message}[/red]")
+            raise typer.Exit(1)
+
+    else:
+        console.print(f"[green]Already at latest version ({version_info.current})[/green]")
+        console.print(f"[dim]Source checked: {version_info.source}[/dim]")
+
+
+# =============================================================================
 # BOOTSTRAP Command
 # =============================================================================
 
+
 @app.command("bootstrap")
 def bootstrap_cmd(
-    check_only: bool = typer.Option(False, "--check-only", "-c", help="Only check current state, don't make changes"),
-    quick: bool = typer.Option(False, "--quick", "-q", help="Quick check (skip network tests)")
+    check_only: bool = typer.Option(
+        False, "--check-only", "-c", help="Only check current state, don't make changes"
+    ),
+    quick: bool = typer.Option(False, "--quick", "-q", help="Quick check (skip network tests)"),
 ):
     """Bootstrap the harness with interactive setup.
 

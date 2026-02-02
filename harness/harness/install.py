@@ -16,7 +16,6 @@ import shutil
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
 
@@ -25,6 +24,7 @@ console = Console()
 
 class InstallStatus(Enum):
     """Installation status codes."""
+
     NOT_INSTALLED = "not_installed"
     PARTIAL = "partial"
     COMPLETE = "complete"
@@ -34,16 +34,18 @@ class InstallStatus(Enum):
 @dataclass
 class ComponentStatus:
     """Status of an individual component."""
+
     name: str
     installed: bool
-    path: Optional[Path] = None
-    version: Optional[str] = None
+    path: Path | None = None
+    version: str | None = None
     issues: list[str] = field(default_factory=list)
 
 
 @dataclass
 class InstallResult:
     """Result of an installation operation."""
+
     success: bool
     components: list[ComponentStatus] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -79,7 +81,7 @@ class MCPInstaller:
         "observability",
     ]
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         """Initialize installer.
 
         Args:
@@ -123,11 +125,9 @@ class MCPInstaller:
         # Create directory structure
         try:
             self._create_directories()
-            result.components.append(ComponentStatus(
-                name="directories",
-                installed=True,
-                path=self.claude_dir
-            ))
+            result.components.append(
+                ComponentStatus(name="directories", installed=True, path=self.claude_dir)
+            )
         except Exception as e:
             result.success = False
             result.errors.append(f"Failed to create directories: {e}")
@@ -215,12 +215,14 @@ class MCPInstaller:
 
         # Check directories
         dirs_ok = self.claude_dir.exists() and self.hooks_dir.exists() and self.skills_dir.exists()
-        components.append(ComponentStatus(
-            name="directories",
-            installed=dirs_ok,
-            path=self.claude_dir if dirs_ok else None,
-            issues=[] if dirs_ok else ["Missing .claude directory structure"]
-        ))
+        components.append(
+            ComponentStatus(
+                name="directories",
+                installed=dirs_ok,
+                path=self.claude_dir if dirs_ok else None,
+                issues=[] if dirs_ok else ["Missing .claude directory structure"],
+            )
+        )
 
         # Check MCP server configuration
         mcp_ok = False
@@ -238,35 +240,41 @@ class MCPInstaller:
         else:
             mcp_issues.append("settings.json not found")
 
-        components.append(ComponentStatus(
-            name="mcp_server",
-            installed=mcp_ok,
-            path=self.settings_path if mcp_ok else None,
-            issues=mcp_issues
-        ))
+        components.append(
+            ComponentStatus(
+                name="mcp_server",
+                installed=mcp_ok,
+                path=self.settings_path if mcp_ok else None,
+                issues=mcp_issues,
+            )
+        )
 
         # Check hooks
         for hook_name in self.REQUIRED_HOOKS:
             hook_path = self.hooks_dir / hook_name
             hook_ok = hook_path.exists()
-            components.append(ComponentStatus(
-                name=f"hook:{hook_name}",
-                installed=hook_ok,
-                path=hook_path if hook_ok else None,
-                issues=[] if hook_ok else [f"Hook file missing: {hook_name}"]
-            ))
+            components.append(
+                ComponentStatus(
+                    name=f"hook:{hook_name}",
+                    installed=hook_ok,
+                    path=hook_path if hook_ok else None,
+                    issues=[] if hook_ok else [f"Hook file missing: {hook_name}"],
+                )
+            )
 
         # Check skills
         for skill_name in self.REQUIRED_SKILLS:
             skill_path = self.skills_dir / skill_name
             skill_md = skill_path / "SKILL.md"
             skill_ok = skill_path.exists() and skill_md.exists()
-            components.append(ComponentStatus(
-                name=f"skill:{skill_name}",
-                installed=skill_ok,
-                path=skill_path if skill_ok else None,
-                issues=[] if skill_ok else [f"Skill missing or incomplete: {skill_name}"]
-            ))
+            components.append(
+                ComponentStatus(
+                    name=f"skill:{skill_name}",
+                    installed=skill_ok,
+                    path=skill_path if skill_ok else None,
+                    issues=[] if skill_ok else [f"Skill missing or incomplete: {skill_name}"],
+                )
+            )
 
         # Determine overall status
         installed_count = sum(1 for c in components if c.installed)
@@ -360,7 +368,7 @@ class MCPInstaller:
                 "args": ["run", "--directory", "./harness", "python", "-m", "harness.mcp.server"],
                 "env": {
                     "HARNESS_DB_PATH": "./harness/harness.db",
-                }
+                },
             }
 
             # Add default permissions if not present
@@ -372,7 +380,7 @@ class MCPInstaller:
                         "Bash(git *)",
                         "Bash(pytest *)",
                     ],
-                    "deny": []
+                    "deny": [],
                 }
 
             # Add hooks configuration
@@ -383,60 +391,40 @@ class MCPInstaller:
                 {
                     "matcher": "Bash",
                     "hooks": [
-                        {
-                            "type": "command",
-                            "command": "./.claude/hooks/validate-box-up-env.sh"
-                        }
-                    ]
+                        {"type": "command", "command": "./.claude/hooks/validate-box-up-env.sh"}
+                    ],
                 },
                 {
                     "matcher": "*",
                     "hooks": [
-                        {
-                            "type": "command",
-                            "command": "python3 ./.claude/hooks/universal-hook.py"
-                        }
-                    ]
-                }
+                        {"type": "command", "command": "python3 ./.claude/hooks/universal-hook.py"}
+                    ],
+                },
             ]
 
             settings["hooks"]["PostToolUse"] = [
                 {
                     "matcher": "Bash",
                     "hooks": [
-                        {
-                            "type": "command",
-                            "command": "./.claude/hooks/notify-box-up-status.sh"
-                        }
-                    ]
+                        {"type": "command", "command": "./.claude/hooks/notify-box-up-status.sh"}
+                    ],
                 },
                 {
                     "matcher": "*",
                     "hooks": [
-                        {
-                            "type": "command",
-                            "command": "python3 ./.claude/hooks/audit-logger.py"
-                        }
-                    ]
-                }
+                        {"type": "command", "command": "python3 ./.claude/hooks/audit-logger.py"}
+                    ],
+                },
             ]
 
             with open(self.settings_path, "w") as f:
                 json.dump(settings, f, indent=2)
                 f.write("\n")
 
-            return ComponentStatus(
-                name="mcp_server",
-                installed=True,
-                path=self.settings_path
-            )
+            return ComponentStatus(name="mcp_server", installed=True, path=self.settings_path)
 
         except Exception as e:
-            return ComponentStatus(
-                name="mcp_server",
-                installed=False,
-                issues=[str(e)]
-            )
+            return ComponentStatus(name="mcp_server", installed=False, issues=[str(e)])
 
     def _install_hooks(self, force: bool) -> list[ComponentStatus]:
         """Install hook scripts."""
@@ -449,34 +437,34 @@ class MCPInstaller:
             try:
                 if source.exists():
                     if dest.exists() and not force:
-                        results.append(ComponentStatus(
-                            name=f"hook:{hook_name}",
-                            installed=True,
-                            path=dest,
-                            issues=["Already exists (use --force to overwrite)"]
-                        ))
+                        results.append(
+                            ComponentStatus(
+                                name=f"hook:{hook_name}",
+                                installed=True,
+                                path=dest,
+                                issues=["Already exists (use --force to overwrite)"],
+                            )
+                        )
                     else:
                         shutil.copy2(source, dest)
                         # Make executable
                         dest.chmod(dest.stat().st_mode | 0o111)
-                        results.append(ComponentStatus(
-                            name=f"hook:{hook_name}",
-                            installed=True,
-                            path=dest
-                        ))
+                        results.append(
+                            ComponentStatus(name=f"hook:{hook_name}", installed=True, path=dest)
+                        )
                 else:
                     # Hook doesn't exist in source - will be created later
-                    results.append(ComponentStatus(
-                        name=f"hook:{hook_name}",
-                        installed=False,
-                        issues=[f"Source not found: {source}"]
-                    ))
+                    results.append(
+                        ComponentStatus(
+                            name=f"hook:{hook_name}",
+                            installed=False,
+                            issues=[f"Source not found: {source}"],
+                        )
+                    )
             except Exception as e:
-                results.append(ComponentStatus(
-                    name=f"hook:{hook_name}",
-                    installed=False,
-                    issues=[str(e)]
-                ))
+                results.append(
+                    ComponentStatus(name=f"hook:{hook_name}", installed=False, issues=[str(e)])
+                )
 
         return results
 
@@ -493,12 +481,14 @@ class MCPInstaller:
                     if dest.exists() and not force:
                         # Check if SKILL.md exists
                         if (dest / "SKILL.md").exists():
-                            results.append(ComponentStatus(
-                                name=f"skill:{skill_name}",
-                                installed=True,
-                                path=dest,
-                                issues=["Already exists (use --force to overwrite)"]
-                            ))
+                            results.append(
+                                ComponentStatus(
+                                    name=f"skill:{skill_name}",
+                                    installed=True,
+                                    path=dest,
+                                    issues=["Already exists (use --force to overwrite)"],
+                                )
+                            )
                         else:
                             # Copy missing files
                             for item in source.iterdir():
@@ -507,33 +497,31 @@ class MCPInstaller:
                                         shutil.copytree(item, dest / item.name)
                                     else:
                                         shutil.copy2(item, dest / item.name)
-                            results.append(ComponentStatus(
-                                name=f"skill:{skill_name}",
-                                installed=True,
-                                path=dest
-                            ))
+                            results.append(
+                                ComponentStatus(
+                                    name=f"skill:{skill_name}", installed=True, path=dest
+                                )
+                            )
                     else:
                         # Fresh install or force
                         if dest.exists():
                             shutil.rmtree(dest)
                         shutil.copytree(source, dest)
-                        results.append(ComponentStatus(
-                            name=f"skill:{skill_name}",
-                            installed=True,
-                            path=dest
-                        ))
+                        results.append(
+                            ComponentStatus(name=f"skill:{skill_name}", installed=True, path=dest)
+                        )
                 else:
-                    results.append(ComponentStatus(
-                        name=f"skill:{skill_name}",
-                        installed=False,
-                        issues=[f"Source not found: {source}"]
-                    ))
+                    results.append(
+                        ComponentStatus(
+                            name=f"skill:{skill_name}",
+                            installed=False,
+                            issues=[f"Source not found: {source}"],
+                        )
+                    )
             except Exception as e:
-                results.append(ComponentStatus(
-                    name=f"skill:{skill_name}",
-                    installed=False,
-                    issues=[str(e)]
-                ))
+                results.append(
+                    ComponentStatus(name=f"skill:{skill_name}", installed=False, issues=[str(e)])
+                )
 
         return results
 

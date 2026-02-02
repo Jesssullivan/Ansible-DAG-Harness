@@ -16,13 +16,13 @@ This harness provides:
 
 __version__ = "0.2.0"
 
-from harness.db.state import StateDB
-from harness.dag.graph import WorkflowGraph
-from harness.dag.langgraph_engine import LangGraphWorkflowRunner, BoxUpRoleState
-from harness.dag.parallel import ParallelWaveExecutor
 from harness.config import HarnessConfig
+from harness.dag.graph import WorkflowGraph
+from harness.dag.langgraph_engine import BoxUpRoleState, LangGraphWorkflowRunner
+from harness.dag.parallel import ParallelWaveExecutor
+from harness.db.state import StateDB
+from harness.hitl import BreakpointManager, HumanInputHandler
 from harness.notifications import NotificationService
-from harness.hitl import HumanInputHandler, BreakpointManager
 
 __all__ = [
     "StateDB",

@@ -2,7 +2,7 @@
 
 This module handles:
 - Environment variable detection
-- Credential validation (GITLAB_TOKEN, KEEPASSXC_DB_PASSWORD, etc.)
+- Credential validation (GITLAB_TOKEN required, HOTL_EMAIL_TO optional)
 - Interactive prompting for missing credentials
 """
 
@@ -11,11 +11,11 @@ import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 
 class CredentialStatus(Enum):
     """Status of a credential check."""
+
     FOUND = "found"
     NOT_FOUND = "not_found"
     INVALID = "invalid"
@@ -25,17 +25,19 @@ class CredentialStatus(Enum):
 @dataclass
 class CredentialResult:
     """Result of checking a single credential."""
+
     name: str
     status: CredentialStatus
-    source: Optional[str] = None  # Where it was found (env, file, etc.)
-    value: Optional[str] = None  # Masked or partial value for display
-    error: Optional[str] = None
+    source: str | None = None  # Where it was found (env, file, etc.)
+    value: str | None = None  # Masked or partial value for display
+    error: str | None = None
     required: bool = True
 
 
 @dataclass
 class CredentialCheckResult:
     """Result of checking all credentials."""
+
     all_required_present: bool
     credentials: list[CredentialResult] = field(default_factory=list)
 
@@ -43,7 +45,8 @@ class CredentialCheckResult:
     def missing_required(self) -> list[str]:
         """Get list of missing required credentials."""
         return [
-            c.name for c in self.credentials
+            c.name
+            for c in self.credentials
             if c.required and c.status in (CredentialStatus.NOT_FOUND, CredentialStatus.INVALID)
         ]
 
@@ -73,17 +76,9 @@ class CredentialDiscovery:
     }
 
     # Optional credentials
+    # Simplified to only HOTL_EMAIL_TO
+    # Removed: KEEPASSXC_DB_PASSWORD (not needed), DISCORD_WEBHOOK_URL (email only)
     OPTIONAL_CREDENTIALS = {
-        "KEEPASSXC_DB_PASSWORD": {
-            "description": "KeePassXC database password",
-            "env_vars": ["KEEPASSXC_DB_PASSWORD", "KEEPASS_PASSWORD"],
-            "validation": None,
-        },
-        "DISCORD_WEBHOOK_URL": {
-            "description": "Discord webhook for notifications",
-            "env_vars": ["DISCORD_WEBHOOK_URL"],
-            "validation": "url_format",
-        },
         "HOTL_EMAIL_TO": {
             "description": "Email address for HOTL notifications",
             "env_vars": ["HOTL_EMAIL_TO"],
@@ -91,7 +86,7 @@ class CredentialDiscovery:
         },
     }
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         """Initialize credential discovery.
 
         Args:
@@ -120,22 +115,12 @@ class CredentialDiscovery:
             result = self._check_credential(name, config, required=False, validate=validate)
             results.append(result)
 
-        all_required = all(
-            c.status == CredentialStatus.FOUND
-            for c in results if c.required
-        )
+        all_required = all(c.status == CredentialStatus.FOUND for c in results if c.required)
 
-        return CredentialCheckResult(
-            all_required_present=all_required,
-            credentials=results
-        )
+        return CredentialCheckResult(all_required_present=all_required, credentials=results)
 
     def _check_credential(
-        self,
-        name: str,
-        config: dict,
-        required: bool,
-        validate: bool
+        self, name: str, config: dict, required: bool, validate: bool
     ) -> CredentialResult:
         """Check a single credential.
 
@@ -180,7 +165,7 @@ class CredentialDiscovery:
                 name=name,
                 status=status,
                 required=required,
-                error=f"Credential not found in environment or .env files"
+                error="Credential not found in environment or .env files",
             )
 
         # Validate if requested
@@ -193,7 +178,7 @@ class CredentialDiscovery:
                     source=source,
                     value=self._mask_value(value),
                     required=required,
-                    error=error
+                    error=error,
                 )
 
         return CredentialResult(
@@ -201,10 +186,10 @@ class CredentialDiscovery:
             status=CredentialStatus.FOUND,
             source=source,
             value=self._mask_value(value),
-            required=required
+            required=required,
         )
 
-    def _check_env_file(self, env_vars: list[str]) -> tuple[Optional[str], Optional[str]]:
+    def _check_env_file(self, env_vars: list[str]) -> tuple[str | None, str | None]:
         """Check .env files for credential.
 
         Searches multiple common locations in priority order:
@@ -250,25 +235,31 @@ class CredentialDiscovery:
         paths = []
 
         # 1. Project-local files (highest priority)
-        paths.extend([
-            self.project_root / ".env",
-            self.project_root / ".env.local",
-            self.project_root / ".env.box-up-role",
-        ])
+        paths.extend(
+            [
+                self.project_root / ".env",
+                self.project_root / ".env.local",
+                self.project_root / ".env.box-up-role",
+            ]
+        )
 
         # 2. Home directory files
-        paths.extend([
-            Path.home() / ".env",
-            Path.home() / ".claude" / ".env",
-        ])
+        paths.extend(
+            [
+                Path.home() / ".env",
+                Path.home() / ".claude" / ".env",
+            ]
+        )
 
         # 3. Parent directory (if in a subdirectory like harness/)
         parent = self.project_root.parent
         if parent != self.project_root:
-            paths.extend([
-                parent / ".env",
-                parent / ".env.local",
-            ])
+            paths.extend(
+                [
+                    parent / ".env",
+                    parent / ".env.local",
+                ]
+            )
 
         # 4. Sibling project directories (common in ~/git layout)
         git_dir = Path.home() / "git"
@@ -277,22 +268,26 @@ class CredentialDiscovery:
             for sibling in ["ems", "crush-dots", "tinyland", "upgrading-dw"]:
                 sibling_path = git_dir / sibling
                 if sibling_path.exists():
-                    paths.extend([
-                        sibling_path / ".env",
-                        sibling_path / ".env.box-up-role",
-                    ])
+                    paths.extend(
+                        [
+                            sibling_path / ".env",
+                            sibling_path / ".env.box-up-role",
+                        ]
+                    )
 
         # 5. Config directories
         config_dir = Path.home() / ".config"
         if config_dir.exists():
-            paths.extend([
-                config_dir / "crush" / ".env",
-                config_dir / "claude-flow" / ".env.glm",
-            ])
+            paths.extend(
+                [
+                    config_dir / "crush" / ".env",
+                    config_dir / "claude-flow" / ".env.glm",
+                ]
+            )
 
         return paths
 
-    def _check_keychain(self, name: str) -> Optional[str]:
+    def _check_keychain(self, name: str) -> str | None:
         """Check macOS keychain for credential.
 
         Args:
@@ -307,7 +302,7 @@ class CredentialDiscovery:
                 ["security", "find-generic-password", "-s", name, "-w"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -319,14 +314,12 @@ class CredentialDiscovery:
     def _is_macos(self) -> bool:
         """Check if running on macOS."""
         import platform
+
         return platform.system() == "Darwin"
 
     def _validate_credential(
-        self,
-        name: str,
-        value: str,
-        validation_type: str
-    ) -> tuple[bool, Optional[str]]:
+        self, name: str, value: str, validation_type: str
+    ) -> tuple[bool, str | None]:
         """Validate a credential value.
 
         Args:
@@ -346,7 +339,7 @@ class CredentialDiscovery:
 
         return True, None
 
-    def _validate_gitlab_token(self, token: str) -> tuple[bool, Optional[str]]:
+    def _validate_gitlab_token(self, token: str) -> tuple[bool, str | None]:
         """Validate GitLab API token by making a test request and checking scopes.
 
         Validates that the token:
@@ -360,16 +353,14 @@ class CredentialDiscovery:
             Tuple of (is_valid, error_message)
         """
         try:
-            import urllib.request
             import urllib.error
-            import json
+            import urllib.request
 
             gitlab_url = os.environ.get("GITLAB_URL", "https://gitlab.com")
 
             # First check if token is valid by getting user info
             req = urllib.request.Request(
-                f"{gitlab_url}/api/v4/user",
-                headers={"PRIVATE-TOKEN": token}
+                f"{gitlab_url}/api/v4/user", headers={"PRIVATE-TOKEN": token}
             )
 
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -388,7 +379,10 @@ class CredentialDiscovery:
                 required_scopes = {"api"}  # Minimum required scope
                 missing_scopes = required_scopes - scopes
                 if missing_scopes:
-                    return False, f"Token missing required scopes: {', '.join(missing_scopes)}. Has: {', '.join(scopes)}"
+                    return (
+                        False,
+                        f"Token missing required scopes: {', '.join(missing_scopes)}. Has: {', '.join(scopes)}",
+                    )
 
             return True, None
 
@@ -396,15 +390,13 @@ class CredentialDiscovery:
             if e.code == 401:
                 return False, "Invalid GitLab token (401 Unauthorized)"
             return False, f"GitLab API error: {e.code}"
-        except Exception as e:
+        except Exception:
             # Don't fail if network is unavailable
             return True, None  # Assume valid if we can't check
 
     def _check_gitlab_token_scopes(
-        self,
-        token: str,
-        gitlab_url: str
-    ) -> tuple[bool, Optional[set[str]], Optional[str]]:
+        self, token: str, gitlab_url: str
+    ) -> tuple[bool, set[str] | None, str | None]:
         """Check GitLab token scopes.
 
         Args:
@@ -414,15 +406,14 @@ class CredentialDiscovery:
         Returns:
             Tuple of (success, scopes_set, error_message)
         """
-        import urllib.request
-        import urllib.error
         import json
+        import urllib.error
+        import urllib.request
 
         try:
             # Try to get token info (GitLab 14.0+)
             req = urllib.request.Request(
-                f"{gitlab_url}/api/v4/personal_access_tokens/self",
-                headers={"PRIVATE-TOKEN": token}
+                f"{gitlab_url}/api/v4/personal_access_tokens/self", headers={"PRIVATE-TOKEN": token}
             )
 
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -437,12 +428,12 @@ class CredentialDiscovery:
                 return False, None, "Scope check not available"
             elif e.code == 401:
                 return False, None, "Invalid token"
-        except Exception as e:
+        except Exception:
             pass
 
         return False, None, "Could not check token scopes"
 
-    def _validate_url(self, url: str) -> tuple[bool, Optional[str]]:
+    def _validate_url(self, url: str) -> tuple[bool, str | None]:
         """Validate URL format.
 
         Args:
@@ -461,7 +452,7 @@ class CredentialDiscovery:
         except Exception:
             return False, "Invalid URL format"
 
-    def _validate_email(self, email: str) -> tuple[bool, Optional[str]]:
+    def _validate_email(self, email: str) -> tuple[bool, str | None]:
         """Validate email format.
 
         Args:
@@ -472,7 +463,7 @@ class CredentialDiscovery:
         """
         import re
 
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         if re.match(pattern, email):
             return True, None
         return False, "Invalid email format"
@@ -490,7 +481,7 @@ class CredentialDiscovery:
             return "*" * len(value)
         return f"{value[:4]}{'*' * (len(value) - 8)}{value[-4:]}"
 
-    def get_credential(self, name: str) -> Optional[str]:
+    def get_credential(self, name: str) -> str | None:
         """Get a credential value by name.
 
         Args:
@@ -542,16 +533,18 @@ class CredentialDiscovery:
         standard_vars = ["GITLAB_TOKEN", "GL_TOKEN", "GLAB_TOKEN"]
 
         # Pattern for user-prefixed tokens (e.g., JSULLIVAN2_BATES_GLAB_TOKEN)
-        token_pattern = re.compile(r'^(export\s+)?([A-Z0-9_]*(?:GITLAB|GLAB|GL)_TOKEN)\s*=\s*(.+)$', re.IGNORECASE)
+        token_pattern = re.compile(
+            r"^(export\s+)?([A-Z0-9_]*(?:GITLAB|GLAB|GL)_TOKEN)\s*=\s*(.+)$", re.IGNORECASE
+        )
 
         # Check environment variables first
         for key, value in os.environ.items():
             # Check standard names or pattern matches
             is_token_var = (
-                key in standard_vars or
-                key.endswith("_GLAB_TOKEN") or
-                key.endswith("_GITLAB_TOKEN") or
-                key.endswith("_GL_TOKEN")
+                key in standard_vars
+                or key.endswith("_GLAB_TOKEN")
+                or key.endswith("_GITLAB_TOKEN")
+                or key.endswith("_GL_TOKEN")
             )
             # Also check for glpat- prefix values
             is_glpat = value.startswith("glpat-") if value else False
@@ -615,8 +608,8 @@ class CredentialDiscovery:
             Dict with token test results
         """
         import json
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         result = {
             "token_prefix": token[:8] + "..." if len(token) > 8 else token,
@@ -630,8 +623,7 @@ class CredentialDiscovery:
         try:
             # Test token by getting user info
             req = urllib.request.Request(
-                f"{gitlab_url}/api/v4/user",
-                headers={"PRIVATE-TOKEN": token}
+                f"{gitlab_url}/api/v4/user", headers={"PRIVATE-TOKEN": token}
             )
 
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -656,7 +648,7 @@ class CredentialDiscovery:
 
         return result
 
-    def save_credential_to_env(self, name: str, value: str, env_file: Optional[Path] = None) -> bool:
+    def save_credential_to_env(self, name: str, value: str, env_file: Path | None = None) -> bool:
         """Save a credential to a .env file.
 
         Args:
@@ -699,5 +691,5 @@ class CredentialDiscovery:
 
             return True
 
-        except Exception as e:
+        except Exception:
             return False

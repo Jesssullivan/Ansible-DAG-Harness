@@ -3,18 +3,25 @@
 import logging
 import sqlite3
 import time
-from datetime import datetime
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional, Callable
+from typing import Any
 
-from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, StateGraph
 
 from harness.db.state import StateDB
-from harness.hotl.state import HOTLState, HOTLPhase, create_initial_state
-from harness.hotl.notifications import NotificationService, NotificationConfig
-from harness.hotl.agent_session import AgentStatus, AgentSessionManager
-from harness.hotl.claude_integration import HOTLClaudeIntegration, ClaudeAgentConfig
+from harness.hotl.agent_session import AgentSessionManager, AgentStatus
+from harness.hotl.claude_integration import ClaudeAgentConfig, HOTLClaudeIntegration
+from harness.hotl.claude_sdk_integration import (
+    PermissionMode,
+    SDKAgentConfig,
+    SDKClaudeIntegration,
+    sdk_available,
+)
+from harness.hotl.context import ContextConfig, ContextManager, FileMemory
+from harness.hotl.notifications import NotificationConfig, NotificationService
+from harness.hotl.state import HOTLPhase, HOTLState, create_initial_state
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +45,7 @@ class HOTLSupervisor:
     compile() produces a sync graph. We use sync invocation throughout.
     """
 
-    def __init__(
-        self,
-        db: StateDB,
-        config: Optional[dict] = None
-    ):
+    def __init__(self, db: StateDB, config: dict | None = None):
         """
         Initialize the HOTL supervisor.
 
@@ -53,6 +56,7 @@ class HOTLSupervisor:
                 - email_*: Email configuration
                 - claude_*: Claude agent configuration
                 - repo_root: Repository root for agent working directory
+                - use_sdk_integration: Use claude-agent-sdk (True) or subprocess (False)
         """
         self.db = db
         self.config = config or {}
@@ -70,19 +74,48 @@ class HOTLSupervisor:
         self.notification_service = NotificationService(notif_config)
 
         # Initialize Claude agent integration
-        agent_config = ClaudeAgentConfig(
-            claude_cli_path=self.config.get("claude_cli_path", "claude"),
-            default_timeout=self.config.get("claude_timeout", 600),
-            max_concurrent_agents=self.config.get("claude_max_concurrent", 3),
-            skip_permissions=self.config.get("claude_skip_permissions", False),
-            model=self.config.get("claude_model"),
-        )
+        # Prefer SDK integration if available and configured
+        use_sdk = self.config.get("use_sdk_integration", True)
         session_manager = AgentSessionManager(db=db)
-        self.claude_integration = HOTLClaudeIntegration(
-            config=agent_config,
-            session_manager=session_manager,
-            db=db,
-        )
+
+        if use_sdk and sdk_available():
+            # Use claude-agent-sdk for native integration
+            sdk_config = SDKAgentConfig(
+                default_timeout=self.config.get("claude_timeout", 600),
+                model=self.config.get("claude_model"),
+                permission_mode=(
+                    PermissionMode.BYPASS_PERMISSIONS
+                    if self.config.get("claude_skip_permissions", False)
+                    else PermissionMode.ACCEPT_EDITS
+                ),
+            )
+            self.claude_integration = SDKClaudeIntegration(
+                config=sdk_config,
+                session_manager=session_manager,
+                db=db,
+            )
+            self._using_sdk = True
+            logger.info("Using Claude Agent SDK for native integration")
+        else:
+            # Fall back to subprocess-based integration
+            agent_config = ClaudeAgentConfig(
+                claude_cli_path=self.config.get("claude_cli_path", "claude"),
+                default_timeout=self.config.get("claude_timeout", 600),
+                max_concurrent_agents=self.config.get("claude_max_concurrent", 3),
+                skip_permissions=self.config.get("claude_skip_permissions", False),
+                model=self.config.get("claude_model"),
+            )
+            self.claude_integration = HOTLClaudeIntegration(
+                config=agent_config,
+                session_manager=session_manager,
+                db=db,
+            )
+            self._using_sdk = False
+            if use_sdk:
+                logger.warning(
+                    "Claude Agent SDK not available, falling back to subprocess integration. "
+                    "Install with: pip install claude-agent-sdk"
+                )
 
         # Set up agent callbacks
         self.claude_integration.set_callbacks(
@@ -93,6 +126,21 @@ class HOTLSupervisor:
 
         # Repository root for agent working directory
         self.repo_root = Path(self.config.get("repo_root", "."))
+
+        # Initialize context management (Manus patterns)
+        context_config = ContextConfig(
+            compaction_threshold=self.config.get("context_compaction_threshold", 0.25),
+            max_context_tokens=self.config.get("context_max_tokens", 200000),
+            keep_recent_changes=self.config.get("context_keep_recent_changes", 5),
+            keep_recent_progress=self.config.get("context_keep_recent_progress", 10),
+            preserve_errors=self.config.get("context_preserve_errors", True),
+            diversity_enabled=self.config.get("context_diversity_enabled", True),
+        )
+        self.context_manager = ContextManager(context_config)
+
+        # File-based memory for large observations
+        memory_dir = Path(self.config.get("memory_dir", ".hotl_memory"))
+        self.file_memory = FileMemory(memory_dir)
 
         # Initialize checkpointer for state persistence
         # Use direct connection for SQLite checkpoint saver
@@ -111,7 +159,7 @@ class HOTLSupervisor:
         self._custom_nodes: dict[str, Callable] = {}
 
         # Track current session for external stop/status requests
-        self._current_session_id: Optional[str] = None
+        self._current_session_id: str | None = None
         self._stop_requested: bool = False
 
         # Build workflow graph
@@ -150,12 +198,20 @@ class HOTLSupervisor:
                 "agent_execute": "agent_execute",
                 "test": "test",
                 "notify": "notify",
-                "end": END
-            }
+                "end": END,
+            },
         )
 
         # All action nodes loop back to decide_next
-        for node in ["research", "plan", "gap_analysis", "execute_task", "agent_execute", "test", "notify"]:
+        for node in [
+            "research",
+            "plan",
+            "gap_analysis",
+            "execute_task",
+            "agent_execute",
+            "test",
+            "notify",
+        ]:
             graph.add_edge(node, "decide_next")
 
         return graph.compile(checkpointer=self.checkpointer)
@@ -219,6 +275,24 @@ class HOTLSupervisor:
 
         return phase_to_route.get(current_phase, "research")
 
+    def _maybe_compact_context(self, state: HOTLState) -> HOTLState:
+        """Compact context if needed before agent execution.
+
+        This implements the Manus pattern of proactive context compaction
+        to prevent context bloat during long-running sessions.
+
+        Args:
+            state: Current HOTL state.
+
+        Returns:
+            Possibly compacted HOTL state.
+        """
+        token_estimate = self.context_manager.estimate_state_tokens(state)
+        if self.context_manager.should_compact(token_estimate):
+            logger.info(f"Context compaction triggered at {token_estimate} estimated tokens")
+            return self.context_manager.compact_context(state)
+        return state
+
     def _check_status_node(self, state: HOTLState) -> dict:
         """Check current status and prepare for execution."""
         logger.info(f"HOTL check_status: iteration {state.get('iteration_count', 0)}")
@@ -235,6 +309,12 @@ class HOTLSupervisor:
         except Exception as e:
             logger.error(f"Database health check failed: {e}")
             return {"errors": [f"Database error: {e}"]}
+
+        # Check context size and compact if needed
+        compacted_state = self._maybe_compact_context(state)
+        if compacted_state is not state:
+            # Return the compacted state updates
+            return dict(compacted_state)
 
         return {}
 
@@ -254,11 +334,13 @@ class HOTLSupervisor:
         try:
             regressions = self.db.get_active_regressions()
             if regressions:
-                findings.append({
-                    "type": "regressions",
-                    "count": len(regressions),
-                    "roles": [r.role_name for r in regressions[:5]]
-                })
+                findings.append(
+                    {
+                        "type": "regressions",
+                        "count": len(regressions),
+                        "roles": [r.role_name for r in regressions[:5]],
+                    }
+                )
                 insights.append(f"Found {len(regressions)} active test regressions")
         except Exception as e:
             logger.warning(f"Failed to check regressions: {e}")
@@ -267,12 +349,14 @@ class HOTLSupervisor:
         try:
             roles = self.db.list_roles()
             roles_with_tests = sum(1 for r in roles if r.has_molecule_tests)
-            findings.append({
-                "type": "role_coverage",
-                "total_roles": len(roles),
-                "with_tests": roles_with_tests,
-                "coverage_pct": (roles_with_tests / len(roles) * 100) if roles else 0
-            })
+            findings.append(
+                {
+                    "type": "role_coverage",
+                    "total_roles": len(roles),
+                    "with_tests": roles_with_tests,
+                    "coverage_pct": (roles_with_tests / len(roles) * 100) if roles else 0,
+                }
+            )
         except Exception as e:
             logger.warning(f"Failed to get role stats: {e}")
 
@@ -289,7 +373,7 @@ class HOTLSupervisor:
             "phase": HOTLPhase.RESEARCHING,
             "research_findings": findings,
             "codebase_insights": insights,
-            "iteration_count": state.get("iteration_count", 0) + 1
+            "iteration_count": state.get("iteration_count", 0) + 1,
         }
 
     def _plan_node(self, state: HOTLState) -> dict:
@@ -323,7 +407,7 @@ class HOTLSupervisor:
         return {
             "phase": HOTLPhase.PLANNING,
             "current_plan": current_plan,
-            "plan_revision": state.get("plan_revision", 0) + 1
+            "plan_revision": state.get("plan_revision", 0) + 1,
         }
 
     def _gap_analysis_node(self, state: HOTLState) -> dict:
@@ -358,10 +442,7 @@ class HOTLSupervisor:
         # Limit gaps to prevent overwhelming
         gaps = gaps[:10]
 
-        return {
-            "phase": HOTLPhase.GAP_ANALYZING,
-            "plan_gaps": gaps
-        }
+        return {"phase": HOTLPhase.GAP_ANALYZING, "plan_gaps": gaps}
 
     def _execute_task_node(self, state: HOTLState) -> dict:
         """
@@ -391,7 +472,7 @@ class HOTLSupervisor:
             return {
                 "phase": HOTLPhase.EXECUTING,
                 "pending_tasks": remaining,
-                "completed_tasks": [task_id]
+                "completed_tasks": [task_id],
             }
         except Exception as e:
             logger.error(f"Task {task_id} failed: {e}")
@@ -399,7 +480,7 @@ class HOTLSupervisor:
                 "phase": HOTLPhase.EXECUTING,
                 "pending_tasks": remaining,
                 "failed_tasks": [task_id],
-                "errors": [f"Task {task_id} failed: {e}"]
+                "errors": [f"Task {task_id} failed: {e}"],
             }
 
     def _agent_execute_node(self, state: HOTLState) -> dict:
@@ -437,7 +518,9 @@ class HOTLSupervisor:
                     sessions_to_remove.append(session_id)
 
                 elif session.status == AgentStatus.NEEDS_HUMAN:
-                    logger.info(f"Agent {session_id} needs intervention: {session.intervention_reason}")
+                    logger.info(
+                        f"Agent {session_id} needs intervention: {session.intervention_reason}"
+                    )
                     if session_id not in pending_interventions:
                         pending_interventions.append(session_id)
                     sessions_to_remove.append(session_id)
@@ -496,6 +579,8 @@ class HOTLSupervisor:
         """
         Create a task prompt for a Claude agent based on a gap.
 
+        Applies diversity injection to prevent pattern lock-in (Manus pattern).
+
         Args:
             gap: Gap description from gap analysis
             state: Current HOTL state for context
@@ -505,7 +590,7 @@ class HOTLSupervisor:
         """
         current_plan = state.get("current_plan", "No plan available")
 
-        return f"""You are working on addressing the following gap in our Ansible role codebase:
+        base_task = f"""You are working on addressing the following gap in our Ansible role codebase:
 
 ## Gap to Address
 {gap}
@@ -523,6 +608,8 @@ class HOTLSupervisor:
 
 Work autonomously to resolve this gap while maintaining code quality and following existing patterns.
 """
+        # Apply diversity injection to prevent pattern lock-in
+        return self.context_manager.inject_diversity(base_task)
 
     # Agent lifecycle callbacks
     def _on_agent_complete(self, session) -> None:
@@ -573,7 +660,7 @@ Work autonomously to resolve this gap while maintaining code quality and followi
         return {
             "phase": HOTLPhase.TESTING,
             "errors": errors if errors else [],
-            "warnings": warnings if warnings else []
+            "warnings": warnings if warnings else [],
         }
 
     def _notify_node(self, state: HOTLState) -> dict:
@@ -590,18 +677,12 @@ Work autonomously to resolve this gap while maintaining code quality and followi
 
         # Send notifications synchronously
         try:
-            results = self.notification_service.send_status_update_sync(
-                dict(state),
-                summary
-            )
+            results = self.notification_service.send_status_update_sync(dict(state), summary)
             logger.info(f"Notification results: {results}")
         except Exception as e:
             logger.error(f"Failed to send notifications: {e}")
 
-        return {
-            "phase": HOTLPhase.NOTIFYING,
-            "last_notification_time": time.time()
-        }
+        return {"phase": HOTLPhase.NOTIFYING, "last_notification_time": time.time()}
 
     def _decide_next_node(self, state: HOTLState) -> dict:
         """Decision node - no state changes, just routing."""
@@ -649,7 +730,9 @@ Work autonomously to resolve this gap while maintaining code quality and followi
             for session_id in pending_interventions[:5]:
                 session = self.claude_integration.get_session(session_id)
                 if session:
-                    summary += f"- {session_id[:8]}: {session.intervention_reason or 'Unknown reason'}\n"
+                    summary += (
+                        f"- {session_id[:8]}: {session.intervention_reason or 'Unknown reason'}\n"
+                    )
 
         summary += f"""
 ### Recent Insights
@@ -659,7 +742,7 @@ Work autonomously to resolve this gap while maintaining code quality and followi
 {chr(10).join(f"- {g}" for g in gaps[-5:]) if gaps else "None"}
 
 ### Current Plan
-{state.get('current_plan', 'No plan set')[:500]}
+{state.get("current_plan", "No plan set")[:500]}
 
 ### Issues
 **Errors**: {len(errors)}
@@ -674,7 +757,7 @@ Work autonomously to resolve this gap while maintaining code quality and followi
         self,
         max_iterations: int = 100,
         notification_interval: int = 300,
-        resume_from: Optional[str] = None
+        resume_from: str | None = None,
     ) -> HOTLState:
         """
         Run the HOTL supervisor synchronously.
@@ -709,17 +792,14 @@ Work autonomously to resolve this gap while maintaining code quality and followi
                 initial_state = create_initial_state(
                     max_iterations=max_iterations,
                     notification_interval=notification_interval,
-                    config=self.config
+                    config=self.config,
                 )
 
             # Track session ID for external status/stop
             self._current_session_id = thread_id
 
             # Execute the workflow synchronously
-            final_state = self.workflow.invoke(
-                initial_state,
-                config=config
-            )
+            final_state = self.workflow.invoke(initial_state, config=config)
 
             logger.info("HOTL supervisor completed")
             return final_state
@@ -770,11 +850,7 @@ Work autonomously to resolve this gap while maintaining code quality and followi
             "stop_requested": self._stop_requested,
         }
 
-    def register_custom_node(
-        self,
-        name: str,
-        func: Callable[[HOTLState], dict]
-    ) -> None:
+    def register_custom_node(self, name: str, func: Callable[[HOTLState], dict]) -> None:
         """
         Register a custom node function.
 
@@ -797,10 +873,7 @@ Work autonomously to resolve this gap while maintaining code quality and followi
         return self.claude_integration.get_pending_interventions()
 
     def resolve_intervention(
-        self,
-        session_id: str,
-        resolution: str,
-        continue_agent: bool = False
+        self, session_id: str, resolution: str, continue_agent: bool = False
     ) -> None:
         """
         Resolve a pending agent intervention.
@@ -811,9 +884,7 @@ Work autonomously to resolve this gap while maintaining code quality and followi
             continue_agent: If True, spawn a continuation agent
         """
         self.claude_integration.resolve_intervention(
-            session_id=session_id,
-            resolution=resolution,
-            continue_agent=continue_agent
+            session_id=session_id, resolution=resolution, continue_agent=continue_agent
         )
         logger.info(f"Resolved intervention for agent {session_id}")
 
@@ -846,11 +917,54 @@ Work autonomously to resolve this gap while maintaining code quality and followi
         """Get Claude agent integration statistics."""
         return self.claude_integration.get_stats()
 
+    def get_context_stats(self) -> dict[str, Any]:
+        """Get context management statistics."""
+        return {
+            "context_manager": {
+                "estimated_tokens": self.context_manager.stats.estimated_tokens,
+                "compaction_count": self.context_manager.stats.compaction_count,
+                "last_compaction_time": self.context_manager.stats.last_compaction_time,
+                "items_summarized": self.context_manager.stats.items_summarized,
+            },
+            "file_memory": self.file_memory.get_stats(),
+        }
+
+    def store_large_observation(self, content: str, prefix: str = "obs") -> str:
+        """Store a large observation in file memory.
+
+        Args:
+            content: Content to store.
+            prefix: Prefix for the storage key.
+
+        Returns:
+            Reference string for retrieval.
+        """
+        return self.file_memory.store(content, prefix=prefix)
+
+    def retrieve_observation(self, key: str) -> str | None:
+        """Retrieve an observation from file memory.
+
+        Args:
+            key: Storage key or reference string.
+
+        Returns:
+            Content if found, None otherwise.
+        """
+        return self.file_memory.retrieve(key)
+
+    def cleanup_memory(self, max_age_hours: int = 24) -> int:
+        """Clean up old memory files.
+
+        Args:
+            max_age_hours: Maximum age in hours.
+
+        Returns:
+            Number of files cleaned up.
+        """
+        return self.file_memory.cleanup_old(max_age_hours)
+
     def spawn_agent_manually(
-        self,
-        task: str,
-        working_dir: Optional[Path] = None,
-        context: Optional[dict] = None
+        self, task: str, working_dir: Path | None = None, context: dict | None = None
     ):
         """
         Manually spawn a Claude agent outside the normal workflow.
@@ -864,7 +978,5 @@ Work autonomously to resolve this gap while maintaining code quality and followi
             AgentSession for the spawned agent
         """
         return self.claude_integration.spawn_agent(
-            task=task,
-            working_dir=working_dir or self.repo_root,
-            context=context or {}
+            task=task, working_dir=working_dir or self.repo_root, context=context or {}
         )
