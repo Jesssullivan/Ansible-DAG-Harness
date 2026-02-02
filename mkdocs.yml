@@ -7,7 +7,7 @@
 site_name: DAG Harness
 site_description: Self-installing DAG orchestration for Ansible role deployments
 site_author: Jess Sullivan
-site_url: https://disposable-ansible-dag.xoxd.ai
+site_url: https://disposable-ansible-dag.tinyland.dev
 
 # Theme configuration
 theme:

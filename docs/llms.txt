@@ -173,7 +173,7 @@ waves:
 
 ## Links
 
-- Docs: https://disposable-ansible-dag.xoxd.ai
+- Docs: https://disposable-ansible-dag.tinyland.dev
 - GitHub: https://github.com/tinyland/dag-harness
 - GitLab: https://gitlab.com/tinyland/projects/dag-harness
 - Author: Jess Sullivan (xoxd.ai) — Tinyland.dev, Inc.
