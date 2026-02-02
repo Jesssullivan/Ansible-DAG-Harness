@@ -173,5 +173,7 @@ waves:
 
 ## Links
 
-- Docs: https://tinyland.gitlab.io/projects/dag-harness/
-- Repo: https://gitlab.com/tinyland/projects/dag-harness
+- Docs: https://dag-harness.xoxd.ai
+- GitHub: https://github.com/tinyland/dag-harness
+- GitLab: https://gitlab.com/tinyland/projects/dag-harness
+- Author: Jess Sullivan (xoxd.ai) — Tinyland.dev, Inc.

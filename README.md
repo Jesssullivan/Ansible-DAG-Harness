@@ -13,10 +13,13 @@ Self-installing DAG orchestration for Ansible role deployments using LangGraph.
 ## Quick Start
 
 ```bash
-# Clone and install
-git clone https://gitlab.com/tinyland/projects/dag-harness.git
+# Clone and install (GitHub)
+git clone https://github.com/tinyland/dag-harness.git
 cd dag-harness/harness
 uv sync
+
+# Or from GitLab
+# git clone https://gitlab.com/tinyland/projects/dag-harness.git
 
 # Bootstrap (interactive setup)
 uv run harness bootstrap
@@ -143,6 +146,12 @@ waves:
 - **[MCP Tools](docs/api/mcp-tools.md)** - Tool reference
 - **[LLM Docs](docs/llms.md)** - For AI assistants
 
+## Author
+
+**Jess Sullivan** — [xoxd.ai](https://xoxd.ai)
+
+Developed by [Tinyland.dev, Inc.](https://tinyland.dev)
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE)

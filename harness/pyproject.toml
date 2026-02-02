@@ -6,7 +6,10 @@ readme = "../README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Jess Sullivan", email = "jsullivan2@bates.edu"}
+    {name = "Jess Sullivan", email = "jess@tinyland.dev"}
+]
+maintainers = [
+    {name = "Tinyland.dev, Inc.", email = "hello@tinyland.dev"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -44,11 +47,12 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/user/dag-harness"
-Repository = "https://github.com/user/dag-harness.git"
-Documentation = "https://github.com/user/dag-harness#readme"
-Issues = "https://github.com/user/dag-harness/issues"
-Changelog = "https://github.com/user/dag-harness/blob/main/CHANGELOG.md"
+Homepage = "https://dag-harness.xoxd.ai"
+Documentation = "https://dag-harness.xoxd.ai"
+Repository = "https://github.com/tinyland/dag-harness"
+GitLab = "https://gitlab.com/tinyland/projects/dag-harness"
+Issues = "https://github.com/tinyland/dag-harness/issues"
+Changelog = "https://github.com/tinyland/dag-harness/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

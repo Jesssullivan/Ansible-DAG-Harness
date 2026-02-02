@@ -13,9 +13,13 @@ Thank you for your interest in contributing!
 ### Clone and Install
 
 ```bash
-git clone https://gitlab.com/tinyland/projects/dag-harness.git
+# From GitHub
+git clone https://github.com/tinyland/dag-harness.git
 cd dag-harness/harness
 uv sync --all-extras
+
+# Or from GitLab
+# git clone https://gitlab.com/tinyland/projects/dag-harness.git
 ```
 
 ### Verify Setup

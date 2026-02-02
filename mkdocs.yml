@@ -6,7 +6,8 @@
 
 site_name: DAG Harness
 site_description: Self-installing DAG orchestration for Ansible role deployments
-site_author: DAG Harness Team
+site_author: Jess Sullivan
+site_url: https://dag-harness.xoxd.ai
 
 # Theme configuration
 theme:
@@ -76,4 +77,4 @@ plugins:
             heading_level: 2
 
 # Copyright
-copyright: Copyright &copy; 2026 DAG Harness Team
+copyright: Copyright &copy; 2026 Tinyland.dev, Inc. — <a href="https://xoxd.ai">xoxd.ai</a>
