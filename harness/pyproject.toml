@@ -47,8 +47,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://disposable-ansible-dag.tinyland.dev"
-Documentation = "https://disposable-ansible-dag.tinyland.dev"
+Homepage = "https://disposable-ansible-dag.xoxd.ai"
+Documentation = "https://disposable-ansible-dag.xoxd.ai"
 Repository = "https://github.com/Jesssullivan/dag-harness"
 GitLab = "https://gitlab.com/tinyland/projects/dag-harness"
 Issues = "https://github.com/Jesssullivan/dag-harness/issues"
