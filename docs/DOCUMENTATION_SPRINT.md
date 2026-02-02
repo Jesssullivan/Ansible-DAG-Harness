@@ -1,8 +1,8 @@
 # Documentation Sprint Plan
 
-**Status**: Nearly Complete
+**Status**: Complete
 **Goal**: Clean, auto-updating, LLM-friendly documentation with GitLab Pages
-**Updated**: 2026-02-02
+**Completed**: 2026-02-02
 
 ---
 
@@ -113,8 +113,8 @@ harness box-up-role <role>
 
 ## Success Criteria
 
-- [ ] `mkdocs build` succeeds with API docs (CI pipeline verifying)
+- [x] `mkdocs build` succeeds with API docs (pipeline #2299783068 passed)
 - [x] llms.txt is < 50KB and comprehensive (~5KB, 178 lines)
 - [x] README reflects actual capabilities (14-node DAG, 40+ MCP tools)
-- [ ] GitLab Pages shows updated docs (awaiting pipeline)
-- [ ] No broken internal links
+- [x] GitLab Pages shows updated docs (https://tinyland.gitlab.io/projects/dag-harness/)
+- [x] No broken internal links (fixed vignettes link)
