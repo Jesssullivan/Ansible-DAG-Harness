@@ -10,11 +10,6 @@ variables:
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
   PYTHON_VERSION: "3.12"
 
-# Use GitLab SaaS runners for reliability
-default:
-  tags:
-    - saas-linux-medium-amd64
-
 # Cache Python dependencies
 .uv-cache: &uv-cache
   cache:
