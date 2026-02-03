@@ -14,11 +14,12 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from harness.dag.nodes import (
     AnalyzeDependenciesNode,
-    CheckReverseDepsNode,
+    CheckDependenciesNode,
     ConditionalEdge,
     CreateCommitNode,
     CreateGitLabIssueNode,
@@ -34,6 +35,7 @@ from harness.dag.nodes import (
     RouterEdge,
     RunMoleculeTestsNode,
     ValidateRoleNode,
+    WarnReverseDepsNode,
 )
 from harness.db.models import NodeStatus, WorkflowStatus
 from harness.db.state import StateDB
@@ -63,8 +65,8 @@ class WorkflowGraph:
         graph.set_entry_point("validate_role")
         graph.set_terminal_nodes(["report_summary"])
 
-        # Execute
-        result = await graph.execute("common")
+        # Execute with repo config
+        result = await graph.execute("common", repo_root=Path("/path/to/repo"))
     """
 
     def __init__(self, db: StateDB, name: str = "box_up_role"):
@@ -189,7 +191,12 @@ class WorkflowGraph:
                 await asyncio.sleep(2 ** (node.retries - retries_remaining))
 
     async def execute(
-        self, role_name: str, resume_from: int | None = None, breakpoints: set[str] | None = None
+        self,
+        role_name: str,
+        resume_from: int | None = None,
+        breakpoints: set[str] | None = None,
+        repo_root: Path | None = None,
+        repo_python: str | None = None,
     ) -> dict[str, Any]:
         """
         Execute the workflow for a role.
@@ -198,6 +205,8 @@ class WorkflowGraph:
             role_name: Name of the role to process
             resume_from: Optional execution ID to resume from
             breakpoints: Optional set of node names to pause before
+            repo_root: Path to the target repository root
+            repo_python: Path to the Python interpreter for the target repo
 
         Returns:
             Final state after execution
@@ -215,6 +224,8 @@ class WorkflowGraph:
                     execution_id=execution_id,
                     state=checkpoint.get("state", {}),
                     metadata=checkpoint.get("metadata", {}),
+                    repo_root=repo_root,
+                    repo_python=repo_python,
                 )
                 current_node = checkpoint.get("current_node")
             else:
@@ -232,7 +243,12 @@ class WorkflowGraph:
 
             # Create new execution
             execution_id = self.db.create_execution(self.name, role_name)
-            ctx = NodeContext(role_name=role_name, execution_id=execution_id)
+            ctx = NodeContext(
+                role_name=role_name,
+                execution_id=execution_id,
+                repo_root=repo_root,
+                repo_python=repo_python,
+            )
             current_node = self.entry_point
 
         self._emit_event(
@@ -398,10 +414,13 @@ def create_box_up_role_graph(db: StateDB) -> WorkflowGraph:
     Create the standard box-up-role workflow graph.
 
     Flow:
-        validate_role -> analyze_dependencies -> check_reverse_deps
-            -> create_worktree -> run_molecule_tests -> create_commit
-            -> push_branch -> create_gitlab_issue -> create_merge_request
-            -> report_summary
+        validate_role -> analyze_dependencies -> check_dependencies
+            -> warn_reverse_deps -> create_worktree -> run_molecule_tests
+            -> create_commit -> push_branch -> create_gitlab_issue
+            -> create_merge_request -> report_summary
+
+    Note: check_dependencies verifies UPSTREAM deps (roles this role needs).
+          warn_reverse_deps provides INFO about downstream deps (does NOT block).
     """
     graph = WorkflowGraph(db, "box_up_role")
 
@@ -413,14 +432,24 @@ def create_box_up_role_graph(db: StateDB) -> WorkflowGraph:
 
     graph.add_node(
         AnalyzeDependenciesNode(),
-        edges={NodeResult.SUCCESS: "check_reverse_deps", NodeResult.FAILURE: "report_summary"},
+        edges={NodeResult.SUCCESS: "check_dependencies", NodeResult.FAILURE: "report_summary"},
     )
 
+    # CheckDependenciesNode checks UPSTREAM deps (roles this role needs)
+    # Foundation roles (Wave 0) automatically pass
     graph.add_node(
-        CheckReverseDepsNode(),
+        CheckDependenciesNode(),
         edges={
-            NodeResult.SUCCESS: "create_worktree",
+            NodeResult.SUCCESS: "warn_reverse_deps",
             NodeResult.FAILURE: "report_summary",  # Exit with blocking deps message
+        },
+    )
+
+    # WarnReverseDepsNode provides INFO about downstream deps (does NOT block)
+    graph.add_node(
+        WarnReverseDepsNode(),
+        edges={
+            NodeResult.SUCCESS: "create_worktree",  # Always succeeds (just warns)
         },
     )
 

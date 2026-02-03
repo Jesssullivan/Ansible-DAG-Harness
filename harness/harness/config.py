@@ -2,16 +2,55 @@
 Harness configuration management.
 
 Loads configuration from:
-1. Environment variables
+1. Environment variables (HARNESS_* prefix)
 2. Config files (harness.yml, .claude/box-up-role/config.yml)
 3. Defaults
 """
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+
+
+def find_repo_python(repo_root: Path) -> str:
+    """
+    Find the Python interpreter for a repository.
+
+    Search order:
+    1. repo_root/.venv/bin/python
+    2. repo_root/venv/bin/python
+    3. UV_PROJECT_ENVIRONMENT if set
+    4. sys.executable (fallback)
+
+    Args:
+        repo_root: Root directory of the target repository
+
+    Returns:
+        Path to Python interpreter
+    """
+    venv_paths = [
+        repo_root / ".venv" / "bin" / "python",
+        repo_root / ".venv" / "bin" / "python3",
+        repo_root / "venv" / "bin" / "python",
+        repo_root / "venv" / "bin" / "python3",
+    ]
+
+    for venv_python in venv_paths:
+        if venv_python.exists():
+            return str(venv_python)
+
+    # Check UV_PROJECT_ENVIRONMENT
+    uv_env = os.environ.get("UV_PROJECT_ENVIRONMENT")
+    if uv_env:
+        uv_python = Path(uv_env) / "bin" / "python"
+        if uv_python.exists():
+            return str(uv_python)
+
+    # Fallback to current interpreter
+    return sys.executable
 
 
 @dataclass
@@ -135,10 +174,29 @@ class HarnessConfig:
         }
     )
 
+    # Cached repo_python path (set after load)
+    _repo_python: str | None = field(default=None, repr=False)
+
+    def __post_init__(self):
+        """Resolve repo_root to absolute path after initialization."""
+        self.repo_root = str(Path(self.repo_root).resolve())
+        self._repo_python = None  # Will be computed lazily
+
+    @property
+    def repo_python(self) -> str:
+        """Get the Python interpreter for the target repository."""
+        if self._repo_python is None:
+            self._repo_python = find_repo_python(Path(self.repo_root))
+        return self._repo_python
+
     @classmethod
     def load(cls, config_path: str | None = None) -> "HarnessConfig":
         """Load configuration from file and environment."""
         config = cls()
+
+        # Check HARNESS_CONFIG environment variable first
+        if not config_path:
+            config_path = os.environ.get("HARNESS_CONFIG")
 
         # Try to find config file
         paths_to_try = [
@@ -149,6 +207,12 @@ class HarnessConfig:
             ".claude/box-up-role/config.yml",
         ]
 
+        # Also search up from CWD to find repo root
+        cwd = Path.cwd()
+        for parent in [cwd] + list(cwd.parents)[:5]:
+            paths_to_try.append(str(parent / "harness.yml"))
+            paths_to_try.append(str(parent / ".harness" / "config.yml"))
+
         for path in paths_to_try:
             if path and Path(path).exists():
                 config = cls._load_from_file(path)
@@ -156,6 +220,9 @@ class HarnessConfig:
 
         # Override with environment variables
         config._load_from_env()
+
+        # Ensure repo_root is absolute
+        config.repo_root = str(Path(config.repo_root).resolve())
 
         return config
 
@@ -217,6 +284,10 @@ class HarnessConfig:
         if os.environ.get("HARNESS_DB_PATH"):
             self.db_path = os.environ["HARNESS_DB_PATH"]
 
+        # NEW: Support HARNESS_REPO_ROOT environment variable
+        if os.environ.get("HARNESS_REPO_ROOT"):
+            self.repo_root = os.environ["HARNESS_REPO_ROOT"]
+
         if os.environ.get("GITLAB_PROJECT"):
             self.gitlab.project_path = os.environ["GITLAB_PROJECT"]
 
@@ -234,12 +305,45 @@ class HarnessConfig:
         # Load observability config from environment
         self.observability = ObservabilityConfig.from_env()
 
+    def validate(self) -> list[str]:
+        """
+        Validate configuration and return list of errors.
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        errors = []
+
+        repo_root = Path(self.repo_root)
+        if not repo_root.exists():
+            errors.append(f"repo_root does not exist: {self.repo_root}")
+        elif not (repo_root / "ansible" / "roles").exists():
+            errors.append(f"No ansible/roles directory in repo_root: {self.repo_root}")
+
+        # Validate db_path is writable
+        db_path = Path(self.db_path)
+        if not db_path.is_absolute():
+            db_path = repo_root / db_path
+        db_parent = db_path.parent
+        if not db_parent.exists():
+            try:
+                db_parent.mkdir(parents=True)
+            except OSError as e:
+                errors.append(f"Cannot create database directory {db_parent}: {e}")
+
+        return errors
+
     def get_wave_for_role(self, role_name: str) -> tuple[int, str]:
         """Get wave number and name for a role."""
         for wave_num, wave_info in self.waves.items():
             if role_name in wave_info.get("roles", []):
                 return wave_num, wave_info.get("name", f"Wave {wave_num}")
         return 0, "Unassigned"
+
+    def is_foundation_role(self, role_name: str) -> bool:
+        """Check if a role is a foundation role (Wave 0 with no dependencies)."""
+        wave_num, _ = self.get_wave_for_role(role_name)
+        return wave_num == 0
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""

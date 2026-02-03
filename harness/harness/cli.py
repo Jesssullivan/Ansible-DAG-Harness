@@ -108,7 +108,14 @@ def box_up_role(
 
     graph.add_event_handler(event_handler)
 
-    result = asyncio.run(graph.execute(role_name, breakpoints=bp_set))
+    result = asyncio.run(
+        graph.execute(
+            role_name,
+            breakpoints=bp_set,
+            repo_root=repo_root,
+            repo_python=config.repo_python,
+        )
+    )
 
     # Output result
     if result["status"] == "completed":
@@ -489,8 +496,15 @@ def resume(
         graph.add_event_handler(event_handler)
 
         bp_set = set(breakpoints.split(",")) if breakpoints else None
+        repo_root = Path(config.repo_root)
         result = asyncio.run(
-            graph.execute(row["role_name"], resume_from=execution_id, breakpoints=bp_set)
+            graph.execute(
+                row["role_name"],
+                resume_from=execution_id,
+                breakpoints=bp_set,
+                repo_root=repo_root,
+                repo_python=config.repo_python,
+            )
         )
 
         if result["status"] == "completed":

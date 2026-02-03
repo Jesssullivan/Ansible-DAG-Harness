@@ -69,7 +69,7 @@ class Role(BaseModel):
 
     id: int | None = None
     name: str
-    wave: int = Field(ge=0, le=4)
+    wave: int = Field(ge=0, le=10)
     wave_name: str | None = None
     description: str | None = None
     molecule_path: str | None = None

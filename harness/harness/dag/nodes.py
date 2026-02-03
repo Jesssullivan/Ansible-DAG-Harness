@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 
@@ -35,12 +36,15 @@ class NodeContext:
     - Role being processed
     - Execution metadata
     - Access to state database
+    - Repository configuration (repo_root, repo_python)
     """
 
     role_name: str
     execution_id: int
     state: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+    repo_root: Path | None = None
+    repo_python: str | None = None
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get value from state."""
@@ -213,9 +217,10 @@ class ValidateRoleNode(Node):
         super().__init__("validate_role", "Validate role exists and extract metadata")
 
     async def execute(self, ctx: NodeContext) -> tuple[NodeResult, dict[str, Any]]:
-        from pathlib import Path
+        # Use repo_root from context if available
+        repo_root = ctx.repo_root or Path.cwd()
+        role_path = repo_root / "ansible" / "roles" / ctx.role_name
 
-        role_path = Path(f"ansible/roles/{ctx.role_name}")
         if not role_path.exists():
             return NodeResult.FAILURE, {"error": f"Role not found: {ctx.role_name}"}
 
@@ -242,53 +247,97 @@ class AnalyzeDependenciesNode(Node):
     async def execute(self, ctx: NodeContext) -> tuple[NodeResult, dict[str, Any]]:
         import json
         import subprocess
+        import sys
+
+        # Determine Python interpreter and script path
+        repo_root = ctx.repo_root or Path.cwd()
+
+        # Use repo's venv python if available, otherwise fallback
+        if ctx.repo_python:
+            python_path = ctx.repo_python
+        else:
+            # Try to find venv python
+            venv_python = repo_root / ".venv" / "bin" / "python"
+            if venv_python.exists():
+                python_path = str(venv_python)
+            else:
+                python_path = sys.executable
+
+        script_path = repo_root / "scripts" / "analyze-role-deps.py"
 
         try:
             result = subprocess.run(
-                ["python", "scripts/analyze-role-deps.py", ctx.role_name, "--json"],
+                [python_path, str(script_path), ctx.role_name, "--json"],
                 capture_output=True,
                 text=True,
                 timeout=60,
+                cwd=str(repo_root),
             )
 
-            if result.returncode != 0:
-                return NodeResult.FAILURE, {"error": result.stderr}
+            # Exit code 2 = reverse deps exist (warning, not error)
+            if result.returncode not in (0, 2):
+                return NodeResult.FAILURE, {"error": result.stderr or result.stdout}
 
             analysis = json.loads(result.stdout)
+
+            # Determine if this is a foundation role
+            wave = analysis.get("wave", 0)
+            explicit_deps = analysis.get("explicit_deps", [])
+            is_foundation = wave == 0 and len(explicit_deps) == 0
+
             return NodeResult.SUCCESS, {
-                "wave": analysis.get("wave", 0),
+                "wave": wave,
                 "wave_name": analysis.get("wave_name", ""),
-                "explicit_deps": analysis.get("explicit_deps", []),
+                "explicit_deps": explicit_deps,
                 "implicit_deps": analysis.get("implicit_deps", []),
                 "credentials": analysis.get("credentials", []),
                 "reverse_deps": analysis.get("reverse_deps", []),
                 "tags": analysis.get("tags", []),
+                "is_foundation": is_foundation,
             }
 
         except subprocess.TimeoutExpired:
             return NodeResult.RETRY, {"error": "Analysis timed out"}
         except json.JSONDecodeError as e:
             return NodeResult.FAILURE, {"error": f"Invalid JSON output: {e}"}
+        except FileNotFoundError:
+            return NodeResult.FAILURE, {"error": f"Script not found: {script_path}"}
         except Exception as e:
             return NodeResult.FAILURE, {"error": str(e)}
 
 
-class CheckReverseDepsNode(Node):
-    """Check if reverse dependencies are already boxed up."""
+class CheckDependenciesNode(Node):
+    """
+    Check if UPSTREAM dependencies are already boxed up.
+
+    This node verifies that roles THIS role depends on have already
+    been processed. This is the correct direction for dependency checking.
+
+    Foundation roles (Wave 0 with no dependencies) automatically pass.
+    """
 
     def __init__(self):
-        super().__init__("check_reverse_deps", "Verify reverse dependencies are boxed up first")
+        super().__init__("check_dependencies", "Verify upstream dependencies are boxed up first")
 
     async def execute(self, ctx: NodeContext) -> tuple[NodeResult, dict[str, Any]]:
         import subprocess
 
-        reverse_deps = ctx.get("reverse_deps", [])
-        if not reverse_deps:
+        # Foundation roles have no dependencies - always pass
+        if ctx.get("is_foundation", False):
+            return NodeResult.SUCCESS, {
+                "blocking_deps": [],
+                "foundation_role": True,
+                "info": "Foundation role - no upstream dependencies to check",
+            }
+
+        # Check DEPENDENCIES (roles this role needs), not reverse deps
+        dependencies = ctx.get("explicit_deps", []) + ctx.get("implicit_deps", [])
+        if not dependencies:
             return NodeResult.SUCCESS, {"blocking_deps": []}
 
         blocking = []
-        for dep in reverse_deps:
-            # Check if branch exists on origin
+        for dep in dependencies:
+            # Check if branch exists on origin (already boxed up)
             result = subprocess.run(
                 ["git", "ls-remote", "--heads", "origin", f"sid/{dep}"],
                 capture_output=True,
@@ -300,10 +349,53 @@ class CheckReverseDepsNode(Node):
         if blocking:
             return NodeResult.FAILURE, {
                 "blocking_deps": blocking,
-                "error": f"Must box up first: {', '.join(blocking)}",
+                "error": f"Upstream dependencies must be boxed up first: {', '.join(blocking)}",
             }
 
         return NodeResult.SUCCESS, {"blocking_deps": []}
+
+
+class WarnReverseDepsNode(Node):
+    """
+    Warn about downstream dependencies (informational only).
+
+    This node provides information about which roles depend on this role
+    and may need updates after this role is merged. It does NOT block.
+    """
+
+    def __init__(self):
+        super().__init__("warn_reverse_deps", "Note downstream roles that may need updates")
+
+    async def execute(self, ctx: NodeContext) -> tuple[NodeResult, dict[str, Any]]:
+        import subprocess
+
+        reverse_deps = ctx.get("reverse_deps", [])
+        if not reverse_deps:
+            return NodeResult.SUCCESS, {"reverse_deps_warning": None, "pending_downstream": []}
+
+        # Check which reverse deps haven't been boxed up yet (informational)
+        not_boxed = []
+        for dep in reverse_deps:
+            result = subprocess.run(
+                ["git", "ls-remote", "--heads", "origin", f"sid/{dep}"],
+                capture_output=True,
+                text=True,
+            )
+            if not result.stdout.strip():
+                not_boxed.append(dep)
+
+        if not_boxed:
+            # SUCCESS with informational warning - don't block
+            return NodeResult.SUCCESS, {
+                "reverse_deps_warning": f"After merging, consider updating: {', '.join(not_boxed)}",
+                "pending_downstream": not_boxed,
+            }
+
+        return NodeResult.SUCCESS, {"reverse_deps_warning": None, "pending_downstream": []}
+
+
+# Keep old name as alias for backwards compatibility
+CheckReverseDepsNode = CheckDependenciesNode
 
 
 class CreateWorktreeNode(Node):
@@ -315,16 +407,20 @@ class CreateWorktreeNode(Node):
     async def execute(self, ctx: NodeContext) -> tuple[NodeResult, dict[str, Any]]:
         import subprocess
 
+        repo_root = ctx.repo_root or Path.cwd()
+
         try:
             result = subprocess.run(
                 ["scripts/create-role-worktree.sh", ctx.role_name],
                 capture_output=True,
                 text=True,
                 timeout=300,
+                cwd=str(repo_root),
             )
 
-            if result.returncode != 0:
-                return NodeResult.FAILURE, {"error": result.stderr}
+            # Exit code 2 = warnings (ok to proceed)
+            if result.returncode not in (0, 2):
+                return NodeResult.FAILURE, {"error": result.stderr or result.stdout}
 
             worktree_path = f"../sid-{ctx.role_name}"
             return NodeResult.SUCCESS, {
@@ -361,6 +457,10 @@ class RunMoleculeTestsNode(Node):
         if not ctx.get("has_molecule_tests", False):
             return NodeResult.SKIP, {"molecule_skipped": True, "reason": "No molecule tests"}
 
+        repo_root = ctx.repo_root or Path.cwd()
+        worktree_path = ctx.get("worktree_path")
+        cwd = worktree_path if worktree_path else str(repo_root)
+
         start_time = time.time()
         try:
             result = subprocess.run(
@@ -368,12 +468,12 @@ class RunMoleculeTestsNode(Node):
                 capture_output=True,
                 text=True,
                 timeout=self.timeout_seconds,
-                cwd=ctx.get("worktree_path", "."),
+                cwd=cwd,
             )
 
             duration = int(time.time() - start_time)
 
-            if result.returncode != 0:
+            if result.returncode not in (0, 2):
                 return NodeResult.FAILURE, {
                     "molecule_passed": False,
                     "molecule_duration": duration,
@@ -437,7 +537,7 @@ Wave {wave}: {wave_name}
                 text=True,
             )
 
-            if result.returncode != 0:
+            if result.returncode not in (0, 2):
                 return NodeResult.FAILURE, {"error": result.stderr}
 
             # Get commit SHA
@@ -474,7 +574,7 @@ class PushBranchNode(Node):
                 text=True,
             )
 
-            if result.returncode != 0:
+            if result.returncode not in (0, 2):
                 return NodeResult.FAILURE, {"error": result.stderr}
 
             return NodeResult.SUCCESS, {"pushed": True}
@@ -493,15 +593,18 @@ class CreateGitLabIssueNode(Node):
         import json
         import subprocess
 
+        repo_root = ctx.repo_root or Path.cwd()
+
         try:
             result = subprocess.run(
                 ["scripts/create-gitlab-issues.sh", ctx.role_name, "--json"],
                 capture_output=True,
                 text=True,
                 timeout=60,
+                cwd=str(repo_root),
             )
 
-            if result.returncode != 0:
+            if result.returncode not in (0, 2):
                 return NodeResult.FAILURE, {"error": result.stderr}
 
             issue_data = json.loads(result.stdout)
@@ -530,7 +633,9 @@ class CreateMergeRequestNode(Node):
         import json
         import subprocess
 
+        repo_root = ctx.repo_root or Path.cwd()
         issue_iid = ctx.get("issue_iid")
+
         if not issue_iid:
             return NodeResult.FAILURE, {"error": "No issue IID available"}
 
@@ -540,9 +645,10 @@ class CreateMergeRequestNode(Node):
                 capture_output=True,
                 text=True,
                 timeout=60,
+                cwd=str(repo_root),
             )
 
-            if result.returncode != 0:
+            if result.returncode not in (0, 2):
                 return NodeResult.FAILURE, {"error": result.stderr}
 
             mr_data = json.loads(result.stdout)
@@ -568,6 +674,7 @@ class ReportSummaryNode(Node):
             "role": ctx.role_name,
             "wave": ctx.get("wave"),
             "wave_name": ctx.get("wave_name"),
+            "is_foundation": ctx.get("is_foundation", False),
             "worktree_path": ctx.get("worktree_path"),
             "branch": ctx.get("branch"),
             "commit_sha": ctx.get("commit_sha"),
@@ -576,6 +683,8 @@ class ReportSummaryNode(Node):
             "molecule_passed": ctx.get("molecule_passed"),
             "credentials": ctx.get("credentials", []),
             "dependencies": ctx.get("explicit_deps", []),
+            "reverse_deps_warning": ctx.get("reverse_deps_warning"),
+            "pending_downstream": ctx.get("pending_downstream", []),
         }
 
         return NodeResult.SUCCESS, {"summary": summary}

@@ -13,7 +13,7 @@ PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS roles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
-    wave INTEGER NOT NULL CHECK (wave BETWEEN 0 AND 4),
+    wave INTEGER NOT NULL CHECK (wave BETWEEN 0 AND 10),
     wave_name TEXT,
     description TEXT,
     molecule_path TEXT,
