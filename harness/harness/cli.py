@@ -590,18 +590,22 @@ def init(
     config_path: str | None = typer.Option(
         None, "--config", "-c", help="Path to save config file"
     ),
+    skip_claude: bool = typer.Option(
+        False, "--skip-claude", help="Skip deploying .claude/ assets (hooks, skills, settings)"
+    ),
 ):
     """Initialize harness in a repository.
 
     Detects the git repository root, creates .harness/ directory,
     initializes the database, generates harness.yml, detects Ansible
-    roles, and updates .gitignore.
+    roles, updates .gitignore, and deploys .claude/ assets.
 
     Examples:
         harness init                          # Auto-detect everything
         harness init --repo-root /path/to/repo
         harness init --force                  # Overwrite existing config
         harness init --no-detect-roles        # Skip role scanning
+        harness init --skip-claude            # Skip .claude/ deployment
     """
     from harness.bootstrap.init import init_harness
 
@@ -611,6 +615,7 @@ def init(
             force=force,
             no_detect_roles=no_detect_roles,
             config_path=config_path,
+            skip_claude=skip_claude,
         )
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
@@ -638,6 +643,28 @@ def init(
         console.print("[green].gitignore updated with .harness/ entries[/green]")
     else:
         console.print("[dim].gitignore already has .harness/ entries[/dim]")
+
+    # Report .claude/ deployment status
+    claude_info = result.get("claude_deployed")
+    if claude_info is not None:
+        if claude_info["success"]:
+            console.print(
+                f"[green].claude/ deployed:[/green] "
+                f"{claude_info['components_installed']}/{claude_info['components_total']} components"
+            )
+        else:
+            console.print("[yellow].claude/ deployment had issues:[/yellow]")
+            for err in claude_info.get("errors", []):
+                console.print(f"  [red]{err}[/red]")
+            for warn in claude_info.get("warnings", []):
+                console.print(f"  [yellow]{warn}[/yellow]")
+    elif skip_claude:
+        console.print("[dim].claude/ deployment skipped (--skip-claude)[/dim]")
+
+    if result.get("npm_scripts_patched"):
+        console.print("[green]package.json patched with harness npm scripts[/green]")
+    elif not skip_claude and (repo_root or Path.cwd()).joinpath("package.json").exists():
+        console.print("[dim]package.json already has harness scripts[/dim]")
 
 
 @app.command("config")

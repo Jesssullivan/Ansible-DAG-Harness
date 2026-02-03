@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(harness *)",
+      "Bash(glab *)",
+      "Bash(git *)",
+      "Bash(molecule *)",
+      "Bash(pytest *)",
+      "Bash(python scripts/*)",
+      "Bash(./scripts/*)",
+      "Bash(uv run *)"
+    ],
+    "deny": [
+      "Bash(*--force*push*)",
+      "Bash(*reset --hard*)"
+    ]
+  },
+  "mcpServers": {
+    "dag-harness": {
+      "command": "harness",
+      "args": ["mcp-server"]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${workspaceFolder}/.claude/hooks/validate-box-up-env.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${workspaceFolder}/.claude/hooks/notify-box-up-status.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

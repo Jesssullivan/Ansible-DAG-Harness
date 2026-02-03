@@ -331,6 +331,30 @@ run_selftest() {
     fi
 }
 
+# Run harness init if inside a git repository
+run_harness_init() {
+    if ! command_exists harness; then
+        log_warn "harness command not found in PATH after installation"
+        return 1
+    fi
+
+    # Check if we're inside a git repository
+    if git rev-parse --show-toplevel &>/dev/null; then
+        log_step "Detected git repository, running harness init..."
+        if harness init; then
+            log_success "harness init completed"
+            return 0
+        else
+            log_warn "harness init failed (non-fatal)"
+            return 1
+        fi
+    else
+        log_info "Not inside a git repository, skipping harness init"
+        log_info "Run 'harness init' manually inside your project"
+        return 0
+    fi
+}
+
 # Show post-install instructions
 show_instructions() {
     echo ""
@@ -340,9 +364,9 @@ show_instructions() {
     echo ""
     echo "Next steps:"
     echo "  1. Verify installation:    harness --version"
-    echo "  2. Run full bootstrap:     harness bootstrap"
+    echo "  2. Initialize a project:   cd /path/to/repo && harness init"
     echo "  3. Configure credentials:  harness credentials --prompt"
-    echo "  4. Check system status:    harness bootstrap --check-only"
+    echo "  4. Check system status:    harness check"
     echo ""
     echo "Documentation: ${DOCS_URL}"
     echo "GitHub:        https://github.com/${GITHUB_REPO}"
@@ -377,6 +401,9 @@ main() {
 
     # Discover credentials
     discover_credentials
+
+    # Run harness init if inside a git repo
+    run_harness_init || true  # Don't fail on init issues
 
     # Run self-tests
     run_selftest || true  # Don't fail on selftest issues

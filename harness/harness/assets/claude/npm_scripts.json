@@ -1,0 +1,17 @@
+{
+  "harness": "harness",
+  "harness:list-roles": "harness list-roles",
+  "harness:status": "harness status",
+  "harness:sync": "harness sync",
+  "harness:graph": "harness graph",
+  "harness:box-up": "harness box-up-role",
+  "harness:hotl:start": "harness hotl start",
+  "harness:hotl:stop": "harness hotl stop",
+  "harness:hotl:status": "harness hotl status",
+  "harness:resume": "harness resume",
+  "harness:deps": "harness deps",
+  "harness:worktrees": "harness worktrees",
+  "harness:costs": "harness costs show",
+  "harness:credentials": "harness credentials",
+  "harness:mcp-server": "harness mcp-server"
+}

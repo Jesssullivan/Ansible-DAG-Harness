@@ -14,7 +14,7 @@ This harness provides:
 - Test regression tracking
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 from harness.config import HarnessConfig
 from harness.dag.graph import WorkflowGraph

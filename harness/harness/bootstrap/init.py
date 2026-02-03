@@ -8,8 +8,11 @@ harness project in a git repository:
   - Generates harness.yml configuration
   - Detects ansible roles and populates the database
   - Updates .gitignore with .harness/ entries
+  - Deploys .claude/ directory (hooks, skills, settings) from bundled assets
+  - Patches package.json with harness npm scripts (if present)
 """
 
+import json
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -112,7 +115,7 @@ def _generate_config(
 
     config = HarnessConfig(
         db_path=str(harness_dir / "harness.db"),
-        repo_root=str(repo_root),
+        repo_root=".",
     )
 
     # Detect waves from ansible/roles if present
@@ -221,11 +224,87 @@ def _update_gitignore(repo_root: Path) -> bool:
     return True
 
 
+def _deploy_claude_assets(repo_root: Path, force: bool = False) -> dict:
+    """Deploy .claude/ directory from bundled assets.
+
+    Uses MCPInstaller to deploy hooks, skills, and settings.json
+    from the assets bundled inside the harness wheel.
+
+    Args:
+        repo_root: Repository root path.
+        force: Overwrite existing files.
+
+    Returns:
+        Dict with deployment results.
+    """
+    from harness.install import MCPInstaller, InstallStatus
+
+    installer = MCPInstaller(project_root=repo_root)
+    result = installer.install(force=force)
+
+    return {
+        "success": result.success,
+        "components_installed": sum(1 for c in result.components if c.installed),
+        "components_total": len(result.components),
+        "errors": result.errors,
+        "warnings": result.warnings,
+    }
+
+
+def _patch_npm_scripts(repo_root: Path, force: bool = False) -> bool:
+    """Patch package.json with portable harness npm scripts.
+
+    Reads npm_scripts.json from bundled assets and merges the harness
+    scripts into the project's package.json.
+
+    Args:
+        repo_root: Repository root path.
+        force: Overwrite existing harness scripts.
+
+    Returns:
+        True if package.json was modified, False otherwise.
+    """
+    package_json_path = repo_root / "package.json"
+    if not package_json_path.exists():
+        return False
+
+    try:
+        from harness.assets import loader
+
+        npm_scripts_text = loader.read_text("npm_scripts.json")
+        harness_scripts = json.loads(npm_scripts_text)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return False
+
+    try:
+        with open(package_json_path) as f:
+            package_data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+
+    if "scripts" not in package_data:
+        package_data["scripts"] = {}
+
+    modified = False
+    for key, value in harness_scripts.items():
+        if key not in package_data["scripts"] or force:
+            package_data["scripts"][key] = value
+            modified = True
+
+    if modified:
+        with open(package_json_path, "w") as f:
+            json.dump(package_data, f, indent=2)
+            f.write("\n")
+
+    return modified
+
+
 def init_harness(
     repo_root: Optional[Path] = None,
     force: bool = False,
     no_detect_roles: bool = False,
     config_path: Optional[str] = None,
+    skip_claude: bool = False,
 ) -> dict:
     """Initialize harness in a repository.
 
@@ -236,12 +315,15 @@ def init_harness(
       4. Generate ``harness.yml`` from template (if not exists or ``--force``)
       5. Detect ``ansible/roles/`` and populate roles table
       6. Update ``.gitignore`` with ``.harness/`` entries
+      7. Deploy ``.claude/`` directory (hooks, skills, settings) unless ``--skip-claude``
+      8. Patch ``package.json`` with npm scripts (if present) unless ``--skip-claude``
 
     Args:
         repo_root: Explicit repository root path. Detected via git if None.
         force: Overwrite existing configuration files.
         no_detect_roles: Skip automatic role detection.
         config_path: Custom path for the config file.
+        skip_claude: Skip deploying .claude/ assets and npm scripts.
 
     Returns:
         Dict with initialization results::
@@ -254,6 +336,8 @@ def init_harness(
                 "roles_detected": list[str],
                 "gitignore_updated": bool,
                 "config_created": bool,
+                "claude_deployed": dict | None,
+                "npm_scripts_patched": bool,
             }
 
     Raises:
@@ -290,6 +374,14 @@ def init_harness(
     # 6. Update .gitignore
     gitignore_updated = _update_gitignore(detected_root)
 
+    # 7. Deploy .claude/ assets
+    claude_deployed = None
+    npm_scripts_patched = False
+    if not skip_claude:
+        claude_deployed = _deploy_claude_assets(detected_root, force=force)
+        # 8. Patch npm scripts
+        npm_scripts_patched = _patch_npm_scripts(detected_root, force=force)
+
     return {
         "repo_root": str(detected_root),
         "harness_dir": str(harness_dir),
@@ -298,4 +390,6 @@ def init_harness(
         "roles_detected": roles_detected,
         "gitignore_updated": gitignore_updated,
         "config_created": config_created,
+        "claude_deployed": claude_deployed,
+        "npm_scripts_patched": npm_scripts_patched,
     }

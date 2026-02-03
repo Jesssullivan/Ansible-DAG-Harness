@@ -1,0 +1,58 @@
+# Box Up Role Configuration
+# GitLab iteration + worktree packaging for Ansible roles
+# Deployed by: harness init -- customize for your project
+
+gitlab:
+  # GitLab project path (group/project format)
+  project_path: ""
+  # Group ID for iteration API calls (GitLab Premium feature)
+  group_id: ""
+  # Iteration cadence name
+  iteration_cadence: ""
+  # Default assignee for issues and MRs
+  default_assignee: ""
+  # Labels to apply
+  labels:
+    role: "role"
+    feature: "feature"
+    enhancement: "enhancement"
+    ansible: "ansible"
+    molecule: "molecule"
+
+worktree:
+  # Base path for worktrees (relative to repo root, ".." = sibling directory)
+  base_path: ".."
+  # Branch prefix for role branches
+  branch_prefix: "sid/"
+  # Remote to fetch from for new branches
+  upstream_remote: "origin"
+  # Default base branch
+  base_branch: "main"
+
+testing:
+  # Require molecule tests before commit
+  molecule_required: true
+  # Require pytest CI tests before commit
+  pytest_required: true
+  # Default deployment target for testing
+  deploy_target: ""
+  # Deploy target description
+  deploy_target_description: ""
+
+notifications:
+  # Enable Discord notifications
+  discord_enabled: false
+  # Discord webhook URL (set in environment: DISCORD_WEBHOOK_URL)
+  discord_webhook_env: "DISCORD_WEBHOOK_URL"
+  # Enable email notifications
+  email_enabled: false
+  # Email recipient
+  email_recipient: ""
+
+# Wave definitions
+# Customize for your project's role organization
+waves: {}
+
+# Credential mapping for KeePassXC lookups
+credentials:
+  patterns: []

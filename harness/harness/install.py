@@ -3,6 +3,9 @@
 This module provides commands to install, uninstall, check, and upgrade
 the harness integration with MCP client.
 
+Assets are bundled inside the wheel via harness.assets.claude and deployed
+using importlib.resources -- no adjacent checkout or hardcoded paths needed.
+
 Usage:
     harness install run           # Install harness into MCP client
     harness install check         # Verify installation status
@@ -58,21 +61,21 @@ class MCPInstaller:
     This class handles:
     - Creating .claude directory structure
     - Deploying MCP server configuration
-    - Installing hook scripts
-    - Deploying skill definitions
+    - Installing hook scripts (from bundled assets)
+    - Deploying skill definitions (from bundled assets)
     - Verifying installation status
+
+    Assets are loaded from the wheel via harness.assets.loader,
+    not from filesystem paths relative to __file__.
     """
 
-    # Version of the installation format
-    INSTALL_VERSION = "1.0.0"
+    INSTALL_VERSION = "2.0.0"
 
-    # Required components
     REQUIRED_HOOKS = [
         "validate-box-up-env.sh",
         "notify-box-up-status.sh",
         "rate-limiter-hook.py",
-        "universal-hook.py",
-        "audit-logger.py",
+        "pre-commit-role.sh",
     ]
 
     REQUIRED_SKILLS = [
@@ -92,15 +95,6 @@ class MCPInstaller:
         self.settings_path = self.claude_dir / "settings.json"
         self.hooks_dir = self.claude_dir / "hooks"
         self.skills_dir = self.claude_dir / "skills"
-
-        # Source directories (relative to harness package)
-        # __file__ = harness/harness/install.py
-        # parent.parent = harness/
-        # parent.parent.parent = project root (disposable-dag-langchain/)
-        self.harness_root = Path(__file__).parent.parent.parent
-        self.source_hooks = self.harness_root / ".claude" / "hooks"
-        self.source_skills = self.harness_root / ".claude" / "skills"
-        self.source_settings = self.harness_root / ".claude" / "settings.json"
 
     def install(
         self,
@@ -133,14 +127,14 @@ class MCPInstaller:
             result.errors.append(f"Failed to create directories: {e}")
             return result
 
-        # Install MCP server configuration
+        # Install MCP server configuration + settings
         if not skip_mcp:
             mcp_result = self._install_mcp_config(force)
             result.components.append(mcp_result)
             if not mcp_result.installed:
                 result.success = False
 
-        # Install hooks
+        # Install hooks from bundled assets
         if not skip_hooks:
             hooks_result = self._install_hooks(force)
             result.components.extend(hooks_result)
@@ -148,7 +142,7 @@ class MCPInstaller:
                 if not hook.installed:
                     result.warnings.append(f"Hook not installed: {hook.name}")
 
-        # Install skills
+        # Install skills from bundled assets
         if not skip_skills:
             skills_result = self._install_skills(force)
             result.components.extend(skills_result)
@@ -285,7 +279,6 @@ class MCPInstaller:
         elif installed_count < total_count:
             status = InstallStatus.PARTIAL
         else:
-            # Check for version
             marker_path = self.claude_dir / ".harness-installed"
             if marker_path.exists():
                 try:
@@ -304,7 +297,8 @@ class MCPInstaller:
     def upgrade(self) -> InstallResult:
         """Upgrade existing installation.
 
-        This re-installs hooks and skills while preserving custom settings.
+        Re-installs hooks and skills from bundled assets while preserving
+        custom permissions in settings.json.
 
         Returns:
             InstallResult with status of upgrade
@@ -350,72 +344,78 @@ class MCPInstaller:
             (self.skills_dir / skill).mkdir(exist_ok=True)
 
     def _install_mcp_config(self, force: bool) -> ComponentStatus:
-        """Install MCP server configuration."""
+        """Install MCP server configuration from bundled settings template."""
+        from harness.assets import loader
+
         try:
             if self.settings_path.exists() and not force:
-                # Merge with existing settings
+                # Merge MCP config into existing settings
                 with open(self.settings_path) as f:
                     settings = json.load(f)
             else:
-                settings = {}
+                # Load from bundled template (strip Jinja2 since we have static defaults)
+                try:
+                    template_text = loader.read_text("settings.json.j2")
+                    # The template is valid JSON as-is (no Jinja2 variables used)
+                    settings = json.loads(template_text)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    settings = {}
 
-            # Add/update MCP server configuration
+            # Ensure MCP server config uses the installed harness command
             if "mcpServers" not in settings:
                 settings["mcpServers"] = {}
 
             settings["mcpServers"]["dag-harness"] = {
-                "command": "uv",
-                "args": ["run", "--directory", "./harness", "python", "-m", "harness.mcp.server"],
-                "env": {
-                    "HARNESS_DB_PATH": "./harness/harness.db",
-                },
+                "command": "harness",
+                "args": ["mcp-server"],
             }
 
             # Add default permissions if not present
             if "permissions" not in settings:
                 settings["permissions"] = {
                     "allow": [
+                        "Bash(npm run *)",
                         "Bash(harness *)",
-                        "Bash(uv run *)",
+                        "Bash(glab *)",
                         "Bash(git *)",
+                        "Bash(molecule *)",
                         "Bash(pytest *)",
+                        "Bash(python scripts/*)",
+                        "Bash(./scripts/*)",
+                        "Bash(uv run *)",
                     ],
-                    "deny": [],
+                    "deny": [
+                        "Bash(*--force*push*)",
+                        "Bash(*reset --hard*)",
+                    ],
                 }
 
-            # Add hooks configuration
+            # Add hooks configuration if not present
             if "hooks" not in settings:
-                settings["hooks"] = {}
-
-            settings["hooks"]["PreToolUse"] = [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {"type": "command", "command": "./.claude/hooks/validate-box-up-env.sh"}
+                settings["hooks"] = {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Bash",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "${workspaceFolder}/.claude/hooks/validate-box-up-env.sh",
+                                }
+                            ],
+                        },
                     ],
-                },
-                {
-                    "matcher": "*",
-                    "hooks": [
-                        {"type": "command", "command": "python3 ./.claude/hooks/universal-hook.py"}
+                    "PostToolUse": [
+                        {
+                            "matcher": "Bash",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "${workspaceFolder}/.claude/hooks/notify-box-up-status.sh",
+                                }
+                            ],
+                        },
                     ],
-                },
-            ]
-
-            settings["hooks"]["PostToolUse"] = [
-                {
-                    "matcher": "Bash",
-                    "hooks": [
-                        {"type": "command", "command": "./.claude/hooks/notify-box-up-status.sh"}
-                    ],
-                },
-                {
-                    "matcher": "*",
-                    "hooks": [
-                        {"type": "command", "command": "python3 ./.claude/hooks/audit-logger.py"}
-                    ],
-                },
-            ]
+                }
 
             with open(self.settings_path, "w") as f:
                 json.dump(settings, f, indent=2)
@@ -427,40 +427,43 @@ class MCPInstaller:
             return ComponentStatus(name="mcp_server", installed=False, issues=[str(e)])
 
     def _install_hooks(self, force: bool) -> list[ComponentStatus]:
-        """Install hook scripts."""
+        """Install hook scripts from bundled assets."""
+        from harness.assets import loader
+
         results = []
 
         for hook_name in self.REQUIRED_HOOKS:
-            source = self.source_hooks / hook_name
             dest = self.hooks_dir / hook_name
 
             try:
-                if source.exists():
-                    if dest.exists() and not force:
-                        results.append(
-                            ComponentStatus(
-                                name=f"hook:{hook_name}",
-                                installed=True,
-                                path=dest,
-                                issues=["Already exists (use --force to overwrite)"],
-                            )
-                        )
-                    else:
-                        shutil.copy2(source, dest)
-                        # Make executable
-                        dest.chmod(dest.stat().st_mode | 0o111)
-                        results.append(
-                            ComponentStatus(name=f"hook:{hook_name}", installed=True, path=dest)
-                        )
-                else:
-                    # Hook doesn't exist in source - will be created later
+                if dest.exists() and not force:
                     results.append(
                         ComponentStatus(
                             name=f"hook:{hook_name}",
-                            installed=False,
-                            issues=[f"Source not found: {source}"],
+                            installed=True,
+                            path=dest,
+                            issues=["Already exists (use --force to overwrite)"],
                         )
                     )
+                    continue
+
+                # Read from bundled assets
+                content = loader.read_text(f"hooks/{hook_name}")
+                dest.write_text(content, encoding="utf-8")
+                # Make executable
+                dest.chmod(dest.stat().st_mode | 0o111)
+                results.append(
+                    ComponentStatus(name=f"hook:{hook_name}", installed=True, path=dest)
+                )
+
+            except FileNotFoundError:
+                results.append(
+                    ComponentStatus(
+                        name=f"hook:{hook_name}",
+                        installed=False,
+                        issues=[f"Asset not found in bundle: hooks/{hook_name}"],
+                    )
+                )
             except Exception as e:
                 results.append(
                     ComponentStatus(name=f"hook:{hook_name}", installed=False, issues=[str(e)])
@@ -469,55 +472,55 @@ class MCPInstaller:
         return results
 
     def _install_skills(self, force: bool) -> list[ComponentStatus]:
-        """Install skill definitions."""
+        """Install skill definitions from bundled assets."""
+        from harness.assets import loader
+
         results = []
 
         for skill_name in self.REQUIRED_SKILLS:
-            source = self.source_skills / skill_name
             dest = self.skills_dir / skill_name
 
             try:
-                if source.exists():
-                    if dest.exists() and not force:
-                        # Check if SKILL.md exists
-                        if (dest / "SKILL.md").exists():
-                            results.append(
-                                ComponentStatus(
-                                    name=f"skill:{skill_name}",
-                                    installed=True,
-                                    path=dest,
-                                    issues=["Already exists (use --force to overwrite)"],
-                                )
-                            )
-                        else:
-                            # Copy missing files
-                            for item in source.iterdir():
-                                if not (dest / item.name).exists():
-                                    if item.is_dir():
-                                        shutil.copytree(item, dest / item.name)
-                                    else:
-                                        shutil.copy2(item, dest / item.name)
-                            results.append(
-                                ComponentStatus(
-                                    name=f"skill:{skill_name}", installed=True, path=dest
-                                )
-                            )
-                    else:
-                        # Fresh install or force
-                        if dest.exists():
-                            shutil.rmtree(dest)
-                        shutil.copytree(source, dest)
+                if dest.exists() and not force:
+                    if (dest / "SKILL.md").exists():
                         results.append(
-                            ComponentStatus(name=f"skill:{skill_name}", installed=True, path=dest)
+                            ComponentStatus(
+                                name=f"skill:{skill_name}",
+                                installed=True,
+                                path=dest,
+                                issues=["Already exists (use --force to overwrite)"],
+                            )
                         )
+                        continue
+
+                # Deploy entire skill directory from bundled assets
+                deployed = loader.deploy_directory(
+                    f"skills/{skill_name}",
+                    dest,
+                    executable_extensions=set(),  # Skills are not executable
+                )
+
+                if deployed:
+                    results.append(
+                        ComponentStatus(name=f"skill:{skill_name}", installed=True, path=dest)
+                    )
                 else:
                     results.append(
                         ComponentStatus(
                             name=f"skill:{skill_name}",
                             installed=False,
-                            issues=[f"Source not found: {source}"],
+                            issues=[f"No assets found for skill: {skill_name}"],
                         )
                     )
+
+            except FileNotFoundError:
+                results.append(
+                    ComponentStatus(
+                        name=f"skill:{skill_name}",
+                        installed=False,
+                        issues=[f"Asset not found in bundle: skills/{skill_name}"],
+                    )
+                )
             except Exception as e:
                 results.append(
                     ComponentStatus(name=f"skill:{skill_name}", installed=False, issues=[str(e)])
@@ -544,10 +547,12 @@ class MCPInstaller:
 
     def _write_install_marker(self):
         """Write installation marker file."""
+        from harness import __version__
+
         marker = {
             "version": self.INSTALL_VERSION,
             "installed_at": __import__("datetime").datetime.now().isoformat(),
-            "harness_version": "0.2.0",
+            "harness_version": __version__,
         }
 
         marker_path = self.claude_dir / ".harness-installed"
@@ -563,20 +568,17 @@ def print_install_result(result: InstallResult):
     else:
         console.print("\n[bold red]Installation failed![/bold red]\n")
 
-    # Print component status
     for component in result.components:
         status = "[green]OK[/green]" if component.installed else "[red]MISSING[/red]"
         console.print(f"  {status} {component.name}")
         for issue in component.issues:
             console.print(f"       [dim]{issue}[/dim]")
 
-    # Print errors
     if result.errors:
         console.print("\n[red]Errors:[/red]")
         for error in result.errors:
             console.print(f"  - {error}")
 
-    # Print warnings
     if result.warnings:
         console.print("\n[yellow]Warnings:[/yellow]")
         for warning in result.warnings:

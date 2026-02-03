@@ -1,6 +1,6 @@
 [project]
 name = "dag-harness"
-version = "0.3.0"
+version = "0.3.1"
 description = "Disposable DAG orchestration harness with LangGraph and MCP client integration"
 readme = "../README.md"
 requires-python = ">=3.11"
@@ -44,6 +44,7 @@ dependencies = [
     "aiosqlite>=0.20.0",
     "pyyaml>=6.0.0",
     "packaging>=23.0",
+    "jinja2>=3.1.0",
 ]
 
 [project.urls]
@@ -116,6 +117,8 @@ packages = ["harness"]
 # Include templates for harness init
 "harness/templates/harness.yml.j2" = "harness/templates/harness.yml.j2"
 "harness/templates/gitignore_additions.txt" = "harness/templates/gitignore_additions.txt"
+# Include bundled .claude assets for harness init --claude deployment
+"harness/assets" = "harness/assets"
 
 [tool.hatch.build.targets.sdist]
 include = [
