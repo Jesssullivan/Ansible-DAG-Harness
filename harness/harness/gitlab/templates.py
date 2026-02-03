@@ -109,26 +109,3 @@ def _format_test_evidence(ctx: dict[str, Any]) -> str:
 """
 
     return evidence
-
-
-def render_issue_description(ctx: dict[str, Any]) -> str:
-    """Render issue description from bundled template.
-
-    Args:
-        ctx: Template context for issue.
-
-    Returns:
-        Rendered issue description as markdown string.
-    """
-    template_text = loader.read_text("skills/box-up-role/templates/issue.md")
-    template = jinja2.Template(template_text)
-
-    return template.render(
-        role_name=ctx.get("role_name"),
-        wave_number=ctx.get("wave", 0),
-        wave_name=ctx.get("wave_name", "Unassigned"),
-        deploy_target=ctx.get("deploy_target", "vmnode852"),
-        explicit_deps=ctx.get("explicit_deps", []),
-        reverse_deps=ctx.get("reverse_deps", []),
-        credentials=ctx.get("credentials", []),
-    )

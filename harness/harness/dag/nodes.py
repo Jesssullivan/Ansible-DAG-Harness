@@ -107,24 +107,6 @@ class Node(ABC):
         return False
 
 
-class FunctionNode(Node):
-    """Node that wraps a simple function."""
-
-    def __init__(
-        self,
-        name: str,
-        func: Callable[[NodeContext], tuple[NodeResult, dict[str, Any]]],
-        description: str = "",
-    ):
-        super().__init__(name, description)
-        self._func = func
-
-    async def execute(self, ctx: NodeContext) -> tuple[NodeResult, dict[str, Any]]:
-        if asyncio.iscoroutinefunction(self._func):
-            return await self._func(ctx)
-        return self._func(ctx)
-
-
 class ConditionalEdge:
     """
     Conditional edge that routes to different nodes based on state.
