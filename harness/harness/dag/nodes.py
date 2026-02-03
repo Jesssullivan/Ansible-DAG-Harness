@@ -660,13 +660,49 @@ class CreateGitLabIssueNode(Node):
         repo_root = ctx.repo_root or Path.cwd()
         env = self._get_env_with_venv(repo_root)
 
+        import re
+
         # Use wave info from context (already computed by analyze_dependencies)
         wave = ctx.get("wave", 0)
         wave_name = ctx.get("wave_name", "Unassigned")
 
-        # Build issue title and description
-        title = f"Deploy `{ctx.role_name}` role (Wave {wave})"
-        description = f"""## Role: {ctx.role_name}
+        try:
+            # IDEMPOTENCY: First check if an open issue already exists for this role
+            search_result = subprocess.run(
+                ["glab", "issue", "list", "--search", f"Deploy `{ctx.role_name}`", "--state", "opened"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(repo_root),
+                env=env,
+            )
+
+            # Parse existing issue if found
+            if search_result.returncode == 0 and search_result.stdout.strip():
+                # Look for issue ID pattern like "#123" or "ID: 123"
+                existing_match = re.search(r'#(\d+)\s+Deploy\s+`' + re.escape(ctx.role_name) + r'`', search_result.stdout)
+                if existing_match:
+                    issue_iid = existing_match.group(1)
+                    # Get the issue URL
+                    view_result = subprocess.run(
+                        ["glab", "issue", "view", issue_iid, "--web", "--no-open"],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        cwd=str(repo_root),
+                        env=env,
+                    )
+                    url_match = re.search(r'(https://[^\s]+/issues/\d+)', view_result.stdout + view_result.stderr)
+                    if url_match:
+                        return NodeResult.SUCCESS, {
+                            "issue_url": url_match.group(1),
+                            "issue_iid": issue_iid,
+                            "issue_reused": True,
+                        }
+
+            # No existing issue found, create a new one
+            title = f"Deploy `{ctx.role_name}` role (Wave {wave})"
+            description = f"""## Role: {ctx.role_name}
 
 **Wave**: {wave} - {wave_name}
 
@@ -679,8 +715,6 @@ class CreateGitLabIssueNode(Node):
 *Created by dag-harness*
 """
 
-        try:
-            # Use glab CLI directly
             result = subprocess.run(
                 [
                     "glab", "issue", "create",
@@ -703,30 +737,23 @@ class CreateGitLabIssueNode(Node):
                     "stdout": result.stdout,
                 }
 
-            # Parse issue URL from glab output (format: "https://gitlab.com/.../issues/123")
-            import re
-            url_match = re.search(r'(https://[^\s]+/issues/\d+)', result.stdout)
+            # Parse issue URL from glab output
+            url_match = re.search(r'(https://[^\s]+/issues/\d+)', result.stdout + result.stderr)
             if url_match:
                 issue_url = url_match.group(1)
                 iid_match = re.search(r'/issues/(\d+)', issue_url)
                 issue_iid = iid_match.group(1) if iid_match else None
             else:
-                # Try stderr too (glab sometimes outputs URL there)
-                url_match = re.search(r'(https://[^\s]+/issues/\d+)', result.stderr)
-                if url_match:
-                    issue_url = url_match.group(1)
-                    iid_match = re.search(r'/issues/(\d+)', issue_url)
-                    issue_iid = iid_match.group(1) if iid_match else None
-                else:
-                    return NodeResult.FAILURE, {
-                        "error": "Could not parse issue URL from glab output",
-                        "stdout": result.stdout,
-                        "stderr": result.stderr,
-                    }
+                return NodeResult.FAILURE, {
+                    "error": "Could not parse issue URL from glab output",
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                }
 
             return NodeResult.SUCCESS, {
                 "issue_url": issue_url,
                 "issue_iid": issue_iid,
+                "issue_reused": False,
             }
 
         except subprocess.TimeoutExpired:
@@ -777,17 +804,50 @@ class CreateMergeRequestNode(Node):
 
         repo_root = ctx.repo_root or Path.cwd()
         worktree_path = ctx.get("worktree_path", str(repo_root))
+        branch = ctx.get("branch", f"sid/{ctx.role_name}")
         env = self._get_env_with_venv(repo_root)
         issue_iid = ctx.get("issue_iid")
-        issue_url = ctx.get("issue_url", "")
 
         # Get wave info from context
         wave = ctx.get("wave", 0)
         wave_name = ctx.get("wave_name", "Unassigned")
 
-        # Build MR title and description
-        title = f"feat({ctx.role_name}): Deploy {ctx.role_name} role (Wave {wave})"
-        description = f"""## Summary
+        try:
+            # IDEMPOTENCY: First check if an open MR already exists for this branch
+            search_result = subprocess.run(
+                ["glab", "mr", "list", "--source-branch", branch, "--state", "opened"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(repo_root),
+                env=env,
+            )
+
+            if search_result.returncode == 0 and search_result.stdout.strip():
+                # Look for MR ID pattern like "!123"
+                existing_match = re.search(r'!(\d+)', search_result.stdout)
+                if existing_match:
+                    mr_iid = existing_match.group(1)
+                    # Get the MR URL
+                    view_result = subprocess.run(
+                        ["glab", "mr", "view", mr_iid],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        cwd=str(repo_root),
+                        env=env,
+                    )
+                    url_match = re.search(r'url:\s+(https://[^\s]+)', view_result.stdout)
+                    if url_match:
+                        return NodeResult.SUCCESS, {
+                            "mr_url": url_match.group(1),
+                            "mr_iid": mr_iid,
+                            "mr_reused": True,
+                        }
+
+            # No existing MR found, create a new one
+            title = f"feat({ctx.role_name}): Deploy {ctx.role_name} role (Wave {wave})"
+            description = f"""## Summary
 Deploy `{ctx.role_name}` Ansible role.
 
 **Wave**: {wave} - {wave_name}
@@ -803,8 +863,6 @@ Closes #{issue_iid}
 *Created by dag-harness*
 """
 
-        try:
-            # Use glab CLI directly from the worktree
             result = subprocess.run(
                 [
                     "glab", "mr", "create",
@@ -822,6 +880,17 @@ Closes #{issue_iid}
             )
 
             if result.returncode != 0:
+                # Check if error is "MR already exists" - handle gracefully
+                if "Another open merge request already exists" in result.stderr:
+                    # Try to find the existing MR
+                    mr_match = re.search(r'!(\d+)', result.stderr)
+                    if mr_match:
+                        mr_iid = mr_match.group(1)
+                        return NodeResult.SUCCESS, {
+                            "mr_url": f"https://gitlab.com/bates-ils/projects/ems/ems-mono/-/merge_requests/{mr_iid}",
+                            "mr_iid": mr_iid,
+                            "mr_reused": True,
+                        }
                 return NodeResult.FAILURE, {
                     "error": f"glab mr create failed: {result.stderr}",
                     "stdout": result.stdout,
