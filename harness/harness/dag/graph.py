@@ -227,7 +227,16 @@ class WorkflowGraph:
                     repo_root=repo_root,
                     repo_python=repo_python,
                 )
+                # Try checkpoint first, fall back to execution record's current_node
                 current_node = checkpoint.get("current_node")
+                if not current_node:
+                    with self.db.connection() as conn:
+                        row = conn.execute(
+                            "SELECT current_node FROM workflow_executions WHERE id = ?",
+                            (execution_id,),
+                        ).fetchone()
+                        if row:
+                            current_node = row["current_node"]
             else:
                 raise ValueError(f"No checkpoint found for execution {execution_id}")
         else:

@@ -126,6 +126,7 @@ from harness.notifications import (
 # Module-level database instance for node access
 # Set by create_box_up_role_graph() or LangGraphWorkflowRunner
 _module_db: StateDB | None = None
+_module_config: Any = None
 
 
 def set_module_db(db: StateDB) -> None:
@@ -134,9 +135,20 @@ def set_module_db(db: StateDB) -> None:
     _module_db = db
 
 
+def set_module_config(config: Any) -> None:
+    """Set the module-level harness config for node access."""
+    global _module_config
+    _module_config = config
+
+
 def get_module_db() -> StateDB | None:
     """Get the module-level database instance."""
     return _module_db
+
+
+def get_module_config() -> Any:
+    """Get the module-level harness config."""
+    return _module_config
 
 
 def _record_test_result(
@@ -925,9 +937,20 @@ async def create_issue_node(state: BoxUpRoleState) -> dict:
         }
 
     try:
-        from harness.gitlab.api import GitLabClient
+        from harness.gitlab.api import GitLabClient, GitLabConfig as ApiGitLabConfig
 
-        client = GitLabClient(db)
+        # Use config from harness.yml if available
+        harness_config = get_module_config()
+        api_config = None
+        if harness_config and hasattr(harness_config, "gitlab"):
+            gl = harness_config.gitlab
+            api_config = ApiGitLabConfig(
+                project_path=gl.project_path,
+                group_path=gl.group_path,
+                default_assignee=gl.default_assignee,
+                default_labels=gl.default_labels,
+            )
+        client = GitLabClient(db, config=api_config)
 
         # Build issue description
         description = f"""## Box up `{role_name}` Ansible role
@@ -1017,9 +1040,20 @@ async def create_mr_node(state: BoxUpRoleState) -> dict:
         }
 
     try:
-        from harness.gitlab.api import GitLabClient
+        from harness.gitlab.api import GitLabClient, GitLabConfig as ApiGitLabConfig
 
-        client = GitLabClient(db)
+        # Use config from harness.yml if available
+        harness_config = get_module_config()
+        api_config = None
+        if harness_config and hasattr(harness_config, "gitlab"):
+            gl = harness_config.gitlab
+            api_config = ApiGitLabConfig(
+                project_path=gl.project_path,
+                group_path=gl.group_path,
+                default_assignee=gl.default_assignee,
+                default_labels=gl.default_labels,
+            )
+        client = GitLabClient(db, config=api_config)
 
         # Build MR description
         description = f"""## Summary
@@ -1349,9 +1383,19 @@ async def notify_failure_node(state: BoxUpRoleState) -> dict:
         db = get_module_db()
         if db is not None:
             try:
-                from harness.gitlab.api import GitLabClient
+                from harness.gitlab.api import GitLabClient, GitLabConfig as ApiGitLabConfig
 
-                client = GitLabClient(db)
+                harness_config = get_module_config()
+                api_config = None
+                if harness_config and hasattr(harness_config, "gitlab"):
+                    gl = harness_config.gitlab
+                    api_config = ApiGitLabConfig(
+                        project_path=gl.project_path,
+                        group_path=gl.group_path,
+                        default_assignee=gl.default_assignee,
+                        default_labels=gl.default_labels,
+                    )
+                client = GitLabClient(db, config=api_config)
                 error_msg = "; ".join(errors) if errors else "Unknown error"
 
                 # Update issue with failure info (adds status::blocked label and comment)
@@ -1769,8 +1813,14 @@ class LangGraphWorkflowRunner:
         self._postgres_url = postgres_url
         self._use_postgres = use_postgres or postgres_url is not None
         self._store = store
-        # Set module-level db for node access (regression tracking)
+        # Set module-level db and config for node access
         set_module_db(db)
+        # Load harness config from harness.yml for GitLab settings
+        try:
+            from harness.config import HarnessConfig
+            set_module_config(HarnessConfig.load())
+        except Exception:
+            pass  # Config not required, nodes fall back to defaults
         # Initialize notification service
         self._notification_service = NotificationService(
             notification_config or NotificationConfig(enabled=False)

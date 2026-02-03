@@ -1,6 +1,11 @@
 """GitLab API integration."""
 
 from harness.gitlab.api import GitLabClient
+from harness.gitlab.http_client import (
+    GitLabAPI,
+    GitLabAPIConfig,
+    GitLabAPIError,
+)
 from harness.gitlab.errors import (
     GitLabAPIError,
     GitLabAuthenticationError,
@@ -81,6 +86,10 @@ from harness.gitlab.status import (
 __all__ = [
     # Client
     "GitLabClient",
+    # Pure HTTP client
+    "GitLabAPI",
+    "GitLabAPIConfig",
+    "GitLabAPIError",
     # Idempotency helpers
     "IdempotencyHelper",
     "RoleArtifacts",
