@@ -84,9 +84,9 @@ from harness.gitlab.status import (
 )
 
 __all__ = [
-    # Client
+    # Client (DEPRECATED - use GitLabAPI instead)
     "GitLabClient",
-    # Pure HTTP client
+    # Pure HTTP client (recommended)
     "GitLabAPI",
     "GitLabAPIConfig",
     "GitLabAPIError",

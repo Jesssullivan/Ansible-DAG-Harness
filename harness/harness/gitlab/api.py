@@ -7,6 +7,23 @@ Handles:
 - Merge request creation
 - Merge train integration
 - Label management
+
+.. deprecated::
+    GitLabClient is deprecated. Use GitLabAPI from harness.gitlab.http_client instead.
+    GitLabAPI provides the same functionality using async httpx without glab CLI dependency.
+
+    Migration example::
+
+        # Old (deprecated):
+        from harness.gitlab.api import GitLabClient
+        client = GitLabClient(db)
+        issue = client.create_issue(role_name, title, description)
+
+        # New (recommended):
+        from harness.gitlab.http_client import GitLabAPI, GitLabAPIConfig
+        config = GitLabAPIConfig.from_harness_yml(repo_root)
+        async with GitLabAPI(config) as api:
+            issue, created = await api.get_or_create_issue(search, title, description)
 """
 
 import json
@@ -15,6 +32,7 @@ import os
 import subprocess
 import time
 import urllib.parse
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -94,9 +112,20 @@ class GitLabClient:
 
     Uses glab CLI where possible for authentication, falls back to
     direct API calls for features not supported by glab (e.g., iterations).
+
+    .. deprecated::
+        This class is deprecated. Use :class:`GitLabAPI` from
+        :mod:`harness.gitlab.http_client` instead for async HTTP operations
+        without glab CLI dependency.
     """
 
     def __init__(self, db: StateDB, config: GitLabConfig | None = None):
+        warnings.warn(
+            "GitLabClient is deprecated. Use GitLabAPI from harness.gitlab.http_client instead. "
+            "GitLabAPI provides async HTTP operations without glab CLI dependency.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.db = db
         self.config = config or GitLabConfig()
         self._token: str | None = None
