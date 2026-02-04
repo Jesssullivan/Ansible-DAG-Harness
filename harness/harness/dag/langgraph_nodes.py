@@ -324,7 +324,8 @@ async def create_worktree_node(state: BoxUpRoleState) -> dict:
             pass
 
         # No existing worktree in db - for recoverable errors, attempt self-correction
-        if error.error_type == ErrorType.RECOVERABLE and not force_recreate:
+        # Only attempt recovery if we haven't already tried force recreate
+        if error.error_type == ErrorType.RECOVERABLE and not force_recreate and not branch_force_recreate:
             if should_attempt_recovery(state, "create_worktree"):
                 # Get the appropriate resolution based on the error hint
                 from harness.dag.error_resolution import attempt_resolution
@@ -361,7 +362,8 @@ async def create_worktree_node(state: BoxUpRoleState) -> dict:
         error = classify_error(error_msg, "create_worktree", state)
 
         # Check for recoverable runtime errors
-        if error.error_type == ErrorType.RECOVERABLE and not force_recreate:
+        # Only attempt recovery if we haven't already tried force recreate
+        if error.error_type == ErrorType.RECOVERABLE and not force_recreate and not branch_force_recreate:
             if should_attempt_recovery(state, "create_worktree"):
                 update = create_recovery_state_update(
                     "create_worktree",
