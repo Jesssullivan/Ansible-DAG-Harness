@@ -207,9 +207,7 @@ class LabelManager:
         # Check API for existing label
         try:
             encoded_name = urllib.parse.quote(name, safe="")
-            label_data = self._api_get(
-                f"projects/{self.project_id_encoded}/labels/{encoded_name}"
-            )
+            label_data = self._api_get(f"projects/{self.project_id_encoded}/labels/{encoded_name}")
             self._cache_label(name, True)
             label_data["_created"] = False
             return label_data

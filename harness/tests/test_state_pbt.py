@@ -13,16 +13,13 @@ Test Categories:
 """
 
 import json
-from datetime import datetime
 
 import pytest
-from hypothesis import assume, given, settings, Verbosity, HealthCheck
+from hypothesis import HealthCheck, Verbosity, assume, given, settings
 
 from harness.db.models import (
     Credential,
-    CyclicDependencyError,
     DependencyType,
-    NodeStatus,
     Role,
     RoleDependency,
     WorkflowStatus,
@@ -38,13 +35,11 @@ from tests.strategies import (
     deployment_order_strategy,
     role_dependency_chain_strategy,
     role_diamond_dependency_strategy,
-    role_name_strategy,
     role_strategy,
     state_transition_sequence_strategy,
     wave_strategy,
     workflow_state_transition_strategy,
 )
-
 
 # =============================================================================
 # 1. TRANSITIVITY PROPERTY TESTS
@@ -102,9 +97,9 @@ class TestTransitiveDependencies:
 
         # All roles except the first should be transitive dependencies
         for role_name in roles[1:]:
-            assert role_name in trans_dep_names, (
-                f"{role_name} should be a transitive dependency of {first_role}"
-            )
+            assert (
+                role_name in trans_dep_names
+            ), f"{role_name} should be a transitive dependency of {first_role}"
 
     @pytest.mark.pbt
     @given(diamond=role_diamond_dependency_strategy())
@@ -331,9 +326,9 @@ class TestDeploymentOrder:
         order = db.get_deployment_order()
 
         # All nodes should be in the order
-        assert set(order) == set(nodes), (
-            f"Deployment order {order} should contain all nodes {nodes}"
-        )
+        assert set(order) == set(
+            nodes
+        ), f"Deployment order {order} should contain all nodes {nodes}"
 
 
 # =============================================================================
@@ -370,9 +365,9 @@ class TestWorkflowStateMachine:
         }
 
         for from_state, to_state in transitions:
-            assert to_state in valid_transitions[from_state], (
-                f"Transition {from_state} -> {to_state} should be valid"
-            )
+            assert (
+                to_state in valid_transitions[from_state]
+            ), f"Transition {from_state} -> {to_state} should be valid"
 
     @pytest.mark.pbt
     @given(transitions=state_transition_sequence_strategy(max_length=15))
@@ -432,9 +427,9 @@ class TestWorkflowStateMachine:
         }
 
         for terminal in terminal_states:
-            assert valid_transitions[terminal] == set(), (
-                f"Terminal state {terminal} should have no valid transitions"
-            )
+            assert (
+                valid_transitions[terminal] == set()
+            ), f"Terminal state {terminal} should have no valid transitions"
 
     @pytest.mark.pbt
     def test_pending_is_only_initial_state(self):
@@ -463,9 +458,9 @@ class TestWorkflowStateMachine:
                 incoming[to_state].add(from_state)
 
         # PENDING should have no incoming transitions
-        assert incoming[WorkflowStatus.PENDING] == set(), (
-            f"PENDING should have no incoming transitions, got {incoming[WorkflowStatus.PENDING]}"
-        )
+        assert (
+            incoming[WorkflowStatus.PENDING] == set()
+        ), f"PENDING should have no incoming transitions, got {incoming[WorkflowStatus.PENDING]}"
 
 
 # =============================================================================
@@ -489,9 +484,9 @@ class TestCheckpointConsistency:
         loaded = json.loads(json_str)
 
         # Check all top-level keys preserved
-        assert set(loaded.keys()) == set(metadata.keys()), (
-            f"Keys mismatch: {set(loaded.keys())} != {set(metadata.keys())}"
-        )
+        assert set(loaded.keys()) == set(
+            metadata.keys()
+        ), f"Keys mismatch: {set(loaded.keys())} != {set(metadata.keys())}"
 
         # Check specific values
         assert loaded["version"] == metadata["version"]
@@ -503,7 +498,10 @@ class TestCheckpointConsistency:
         # Check nested state_summary
         assert loaded["state_summary"]["role_name"] == metadata["state_summary"]["role_name"]
         assert loaded["state_summary"]["current_node"] == metadata["state_summary"]["current_node"]
-        assert loaded["state_summary"]["completed_nodes"] == metadata["state_summary"]["completed_nodes"]
+        assert (
+            loaded["state_summary"]["completed_nodes"]
+            == metadata["state_summary"]["completed_nodes"]
+        )
         assert loaded["state_summary"]["errors"] == metadata["state_summary"]["errors"]
 
     @pytest.mark.pbt
@@ -519,10 +517,10 @@ class TestCheckpointConsistency:
 
         # Create prerequisite data
         db.upsert_role(Role(name="test_role", wave=1))
-        role = db.get_role("test_role")
+        db.get_role("test_role")
 
         # Create workflow definition first
-        workflow_id = db.create_workflow_definition(
+        db.create_workflow_definition(
             name="test-workflow",
             description="Test workflow",
             nodes=[{"id": "start"}, {"id": "end"}],

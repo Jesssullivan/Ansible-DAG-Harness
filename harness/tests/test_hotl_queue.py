@@ -4,7 +4,7 @@ import pytest
 
 from harness.db.models import Role
 from harness.db.state import StateDB
-from harness.hotl.queue import QueueItem, QueueItemStatus, RoleQueue
+from harness.hotl.queue import QueueItemStatus, RoleQueue
 
 
 @pytest.fixture

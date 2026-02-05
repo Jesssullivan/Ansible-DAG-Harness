@@ -1,7 +1,8 @@
 # GitLab CI/CD Pipeline for DAG Harness
-# Uses local runners on petting-zoo-mini via lima VM docker
+# Mirrors GitHub Actions for full parity
 
 stages:
+  - lint
   - test
   - build
   - publish
@@ -10,12 +11,9 @@ stages:
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
-  PYTHON_VERSION: "3.12"
-  # Unique clone path per job to avoid git lock conflicts on concurrent runners
   GIT_CLONE_PATH: "$CI_BUILDS_DIR/$CI_CONCURRENT_ID/$CI_PROJECT_NAME"
   GIT_CLEAN_FLAGS: "-ffdx"
 
-# Cache Python dependencies (keyed by pyproject.toml + uv.lock hash)
 .uv-cache: &uv-cache
   cache:
     key:
@@ -28,24 +26,66 @@ variables:
       - harness/.venv
     policy: pull-push
 
-# Use local docker runners via lima VM
 .local-runner: &local-runner
   tags:
     - docker
     - m1
     - tinyland
 
-# Test stage - Run pytest with coverage
-test:
-  stage: test
-  image: python:${PYTHON_VERSION}
-  <<: *uv-cache
+# ============================================================================
+# LINT STAGE
+# ============================================================================
+
+lint:ruff:
+  stage: lint
+  image: python:3.12
+  <<: [*uv-cache, *local-runner]
+  script:
+    - pip install uv
+    - cd harness
+    - uv sync --extra dev
+    - uv run ruff check harness/ tests/
+    - uv run ruff format --check harness/ tests/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+lint:shellcheck:
+  stage: lint
+  image: koalaman/shellcheck-alpine
   <<: *local-runner
+  script:
+    - shellcheck scripts/*.sh || true
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+type-check:
+  stage: lint
+  image: python:3.12
+  <<: [*uv-cache, *local-runner]
+  script:
+    - pip install uv
+    - cd harness
+    - uv sync --extra dev
+    - uv run mypy harness/ --config-file pyproject.toml || true
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ============================================================================
+# TEST STAGE
+# ============================================================================
+
+.test-base: &test-base
+  stage: test
+  <<: [*uv-cache, *local-runner]
   script:
     - pip install uv
     - cd harness
     - uv sync --extra dev || (rm -rf .venv && uv sync --extra dev)
-    - uv run pytest -v --cov=harness --cov-report=xml --cov-report=term-missing
+    - uv run pytest -v --cov=harness --cov-report=xml --cov-report=term-missing -m "not integration and not slow and not e2e"
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
   artifacts:
     reports:
@@ -53,51 +93,64 @@ test:
         coverage_format: cobertura
         path: harness/coverage.xml
     expire_in: 1 week
+
+test:python-3.11:
+  <<: *test-base
+  image: python:3.11
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Lint stage - Check code quality (strict)
-lint:
-  stage: test
-  image: python:${PYTHON_VERSION}
-  <<: *uv-cache
-  <<: *local-runner
-  script:
-    - pip install uv
-    - cd harness
-    - uv sync --extra dev || (rm -rf .venv && uv sync --extra dev)
-    - uv run ruff check harness/ tests/
-    - uv run ruff format --check harness/ tests/
+test:python-3.12:
+  <<: *test-base
+  image: python:3.12
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Property-based testing with Hypothesis
 test-pbt:
   stage: test
-  image: python:${PYTHON_VERSION}
-  <<: *uv-cache
-  <<: *local-runner
+  image: python:3.12
+  <<: [*uv-cache, *local-runner]
   script:
     - pip install uv
     - cd harness
-    - uv sync --extra dev || (rm -rf .venv && uv sync --extra dev)
+    - uv sync --extra dev
     - uv run pytest -m pbt --hypothesis-show-statistics -v
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Build documentation
-build-docs:
-  stage: build
-  image: python:${PYTHON_VERSION}
+# ============================================================================
+# SECURITY
+# ============================================================================
+
+sast:bandit:
+  stage: test
+  image: python:3.12
   <<: *local-runner
   script:
-    - pip install uv
-    - pip install mkdocs mkdocs-material pymdown-extensions mkdocstrings mkdocstrings-python
-    # Install harness package for mkdocstrings to extract docstrings
+    - pip install bandit[toml]
+    - bandit -r harness/harness -f json -o bandit-report.json || true
+  artifacts:
+    paths:
+      - bandit-report.json
+    expire_in: 1 week
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# ============================================================================
+# BUILD STAGE
+# ============================================================================
+
+build-docs:
+  stage: build
+  image: python:3.12
+  <<: *local-runner
+  script:
+    - pip install uv mkdocs mkdocs-material pymdown-extensions mkdocstrings mkdocstrings-python
     - cd harness && uv pip install --system -e . && cd ..
     - mkdocs build --site-dir public
   artifacts:
@@ -107,11 +160,13 @@ build-docs:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Deploy to GitLab Pages
+# ============================================================================
+# PAGES & PUBLISH
+# ============================================================================
+
 pages:
   stage: pages
-  needs:
-    - build-docs
+  needs: [build-docs]
   <<: *local-runner
   script:
     - echo "Deploying to GitLab Pages"
@@ -121,32 +176,15 @@ pages:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Publish to PyPI on tag push
 publish-pypi:
   stage: publish
-  image: python:${PYTHON_VERSION}
+  image: python:3.12
   <<: *local-runner
   rules:
     - if: $CI_COMMIT_TAG =~ /^v/
   script:
-    - pip install uv
+    - pip install uv twine
     - cd harness
-    - uv sync --extra dev || (rm -rf .venv && uv sync --extra dev)
+    - uv sync --extra dev
     - uv build
     - uv run twine upload dist/*
-
-# Security scanning
-sast:
-  stage: test
-  image: python:${PYTHON_VERSION}
-  <<: *local-runner
-  script:
-    - pip install bandit
-    - bandit -r harness/harness -f json -o bandit-report.json || true
-  artifacts:
-    paths:
-      - bandit-report.json
-    expire_in: 1 week
-  allow_failure: true
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

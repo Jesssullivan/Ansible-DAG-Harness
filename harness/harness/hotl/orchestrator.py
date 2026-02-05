@@ -112,9 +112,7 @@ class HOTLOrchestrator:
 
         # Wait for active tasks to finish
         if self._active_tasks:
-            await asyncio.gather(
-                *self._active_tasks.values(), return_exceptions=True
-            )
+            await asyncio.gather(*self._active_tasks.values(), return_exceptions=True)
 
     async def status(self) -> dict:
         """Get orchestrator status.
@@ -134,9 +132,7 @@ class HOTLOrchestrator:
             "queue": queue_status,
         }
 
-    async def approve(
-        self, role_name: str, approved: bool = True, reason: str = ""
-    ) -> None:
+    async def approve(self, role_name: str, approved: bool = True, reason: str = "") -> None:
         """Approve or reject a paused workflow.
 
         Args:
@@ -303,7 +299,5 @@ class HOTLOrchestrator:
             error: Error message describing the failure.
         """
         logger.error(f"Role '{item.role_name}' failed: {error}")
-        self._queue.update_status(
-            item.role_name, QueueItemStatus.FAILED, error=error
-        )
+        self._queue.update_status(item.role_name, QueueItemStatus.FAILED, error=error)
         self._failed_count += 1

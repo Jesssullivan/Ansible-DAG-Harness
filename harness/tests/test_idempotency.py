@@ -14,20 +14,19 @@ Covers:
 All GitLab API calls and subprocess invocations are mocked.
 """
 
-import json
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from harness.dag.langgraph_engine import (
     BoxUpRoleState,
+    add_to_merge_train_node,
     create_initial_state,
     create_issue_node,
     create_mr_node,
     create_worktree_node,
-    add_to_merge_train_node,
     set_module_db,
 )
 from harness.db.models import (
@@ -39,14 +38,12 @@ from harness.db.models import (
 )
 from harness.db.state import StateDB
 from harness.gitlab.idempotency import (
-    CacheEntry,
     IdempotencyHelper,
     RoleArtifacts,
     _cache,
     cache_result,
     clear_cache,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -195,10 +192,12 @@ class TestIssueIdempotency:
         mock_api.get_current_iteration = AsyncMock(return_value=None)
         mock_api.ensure_label_exists = AsyncMock(return_value=True)
         # First call creates, second call finds existing
-        mock_api.get_or_create_issue = AsyncMock(side_effect=[
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, True),
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
-        ])
+        mock_api.get_or_create_issue = AsyncMock(
+            side_effect=[
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, True),
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
+            ]
+        )
 
         mock_api_class = MagicMock()
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_api)
@@ -225,10 +224,12 @@ class TestIssueIdempotency:
 
         # First call: API creates issue but then raises (simulating partial failure)
         # Second call: get_or_create_issue finds the already-created issue
-        mock_api.get_or_create_issue = AsyncMock(side_effect=[
-            RuntimeError("Network timeout after issue creation"),
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
-        ])
+        mock_api.get_or_create_issue = AsyncMock(
+            side_effect=[
+                RuntimeError("Network timeout after issue creation"),
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
+            ]
+        )
 
         mock_api_class = MagicMock()
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_api)
@@ -254,9 +255,9 @@ class TestIssueIdempotency:
         mock_api.get_current_iteration = AsyncMock(return_value=None)
         mock_api.ensure_label_exists = AsyncMock(return_value=True)
         # Both calls return the same issue (second finds what first created)
-        mock_api.get_or_create_issue = AsyncMock(return_value=(
-            {"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False
-        ))
+        mock_api.get_or_create_issue = AsyncMock(
+            return_value=({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False)
+        )
 
         mock_api_class = MagicMock()
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_api)
@@ -345,14 +346,20 @@ class TestMRIdempotency:
         """Calling create_mr_node twice returns same MR IID."""
         # Mock the async GitLabAPI context manager
         mock_api = AsyncMock()
-        mock_api.find_mr_by_branch = AsyncMock(side_effect=[
-            None, None,  # First call: no existing MR
-            {"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, None,  # Second call: found existing
-        ])
-        mock_api.get_or_create_mr = AsyncMock(side_effect=[
-            ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, True),
-            ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, False),
-        ])
+        mock_api.find_mr_by_branch = AsyncMock(
+            side_effect=[
+                None,
+                None,  # First call: no existing MR
+                {"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"},
+                None,  # Second call: found existing
+            ]
+        )
+        mock_api.get_or_create_mr = AsyncMock(
+            side_effect=[
+                ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, True),
+                ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, False),
+            ]
+        )
 
         mock_api_class = MagicMock()
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_api)
@@ -368,7 +375,10 @@ class TestMRIdempotency:
 
         with patch("harness.gitlab.http_client.GitLabAPI", mock_api_class):
             with patch("harness.gitlab.http_client.GitLabAPIConfig"):
-                with patch("harness.gitlab.templates.render_mr_description", return_value="Test description"):
+                with patch(
+                    "harness.gitlab.templates.render_mr_description",
+                    return_value="Test description",
+                ):
                     result1 = await create_mr_node(state)
                     result2 = await create_mr_node(state)
 
@@ -382,9 +392,12 @@ class TestMRIdempotency:
         # Mock the async GitLabAPI context manager
         mock_api = AsyncMock()
         mock_api.find_mr_by_branch = AsyncMock(return_value=None)
-        mock_api.get_or_create_mr = AsyncMock(return_value=(
-            {"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, True
-        ))
+        mock_api.get_or_create_mr = AsyncMock(
+            return_value=(
+                {"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"},
+                True,
+            )
+        )
 
         mock_api_class = MagicMock()
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_api)
@@ -400,7 +413,10 @@ class TestMRIdempotency:
 
         with patch("harness.gitlab.http_client.GitLabAPI", mock_api_class):
             with patch("harness.gitlab.http_client.GitLabAPIConfig"):
-                with patch("harness.gitlab.templates.render_mr_description", return_value="Test description"):
+                with patch(
+                    "harness.gitlab.templates.render_mr_description",
+                    return_value="Test description",
+                ):
                     result = await create_mr_node(state)
 
         assert result["mr_iid"] == 55
@@ -413,9 +429,12 @@ class TestMRIdempotency:
         # Mock the async GitLabAPI context manager
         mock_api = AsyncMock()
         mock_api.find_mr_by_branch = AsyncMock(return_value=None)
-        mock_api.get_or_create_mr = AsyncMock(return_value=(
-            {"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, False
-        ))
+        mock_api.get_or_create_mr = AsyncMock(
+            return_value=(
+                {"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"},
+                False,
+            )
+        )
 
         mock_api_class = MagicMock()
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_api)
@@ -439,7 +458,10 @@ class TestMRIdempotency:
 
         with patch("harness.gitlab.http_client.GitLabAPI", mock_api_class):
             with patch("harness.gitlab.http_client.GitLabAPIConfig"):
-                with patch("harness.gitlab.templates.render_mr_description", return_value="Test description"):
+                with patch(
+                    "harness.gitlab.templates.render_mr_description",
+                    return_value="Test description",
+                ):
                     result1 = await create_mr_node(state_v1)
                     result2 = await create_mr_node(state_v2)
 
@@ -520,17 +542,21 @@ class TestWorktreeIdempotency:
 
         state = _make_state("common")
 
-        with patch("harness.gitlab.api.GitLabClient", return_value=mock_client), \
-             patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager):
+        with (
+            patch("harness.gitlab.api.GitLabClient", return_value=mock_client),
+            patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager),
+        ):
             result1 = await create_worktree_node(state)
 
         assert result1["worktree_path"] == "/tmp/sid-common"
         assert result1["branch"] == "sid/common"
 
         # Second call: manager raises ValueError, node falls back to DB lookup
-        with patch("harness.gitlab.api.GitLabClient", return_value=mock_client), \
-             patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager), \
-             patch.object(db_with_role, "get_worktree", return_value=existing_worktree):
+        with (
+            patch("harness.gitlab.api.GitLabClient", return_value=mock_client),
+            patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager),
+            patch.object(db_with_role, "get_worktree", return_value=existing_worktree),
+        ):
             result2 = await create_worktree_node(state)
 
         assert result2["worktree_path"] == "/tmp/sid-common"
@@ -552,14 +578,16 @@ class TestWorktreeIdempotency:
         mock_result = MagicMock()
         mock_result.stdout = porcelain_output
 
-        with patch("harness.gitlab.idempotency.subprocess.run", return_value=mock_result), \
-             patch("harness.gitlab.idempotency.Path") as mock_path:
+        with (
+            patch("harness.gitlab.idempotency.subprocess.run", return_value=mock_result),
+            patch("harness.gitlab.idempotency.Path") as mock_path,
+        ):
             # Filesystem check fails (expected path doesn't exist)
             mock_resolved = MagicMock()
             mock_resolved.__truediv__ = lambda self, x: Path(f"/expected/{x}")
             mock_path.return_value.resolve.return_value = mock_resolved
-            mock_path.return_value.resolve.return_value.__truediv__ = (
-                lambda self, x: MagicMock(exists=MagicMock(return_value=False))
+            mock_path.return_value.resolve.return_value.__truediv__ = lambda self, x: MagicMock(
+                exists=MagicMock(return_value=False)
             )
 
             # The actual path from git worktree list
@@ -589,16 +617,20 @@ class TestWorktreeIdempotency:
 
         state = _make_state("common")
 
-        with patch("harness.gitlab.api.GitLabClient", return_value=mock_client), \
-             patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager):
+        with (
+            patch("harness.gitlab.api.GitLabClient", return_value=mock_client),
+            patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager),
+        ):
             result1 = await create_worktree_node(state)
             # First attempt fails with stale error
             assert "errors" in result1
             assert len(result1["errors"]) > 0
 
         # Second attempt (after manual cleanup) succeeds
-        with patch("harness.gitlab.api.GitLabClient", return_value=mock_client), \
-             patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager):
+        with (
+            patch("harness.gitlab.api.GitLabClient", return_value=mock_client),
+            patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager),
+        ):
             result2 = await create_worktree_node(state)
             assert result2["worktree_path"] == "/tmp/sid-common"
 
@@ -609,8 +641,10 @@ class TestWorktreeIdempotency:
         mock_result = MagicMock()
         mock_result.stdout = ""
 
-        with patch("harness.gitlab.idempotency.subprocess.run", return_value=mock_result), \
-             patch("harness.gitlab.idempotency.Path") as mock_path:
+        with (
+            patch("harness.gitlab.idempotency.subprocess.run", return_value=mock_result),
+            patch("harness.gitlab.idempotency.Path") as mock_path,
+        ):
             mock_wt_path = MagicMock()
             mock_wt_path.exists.return_value = False
             mock_resolved = MagicMock()
@@ -633,26 +667,28 @@ class TestFullWorkflowIdempotency:
     """Tests for end-to-end workflow idempotency."""
 
     @pytest.mark.asyncio
-    async def test_full_workflow_twice_same_resources(
-        self, db_with_role, sample_issue, sample_mr
-    ):
+    async def test_full_workflow_twice_same_resources(self, db_with_role, sample_issue, sample_mr):
         """Running full workflow twice produces same issue/MR IIDs."""
         # Mock the async GitLabAPI for issue creation
         mock_issue_api = AsyncMock()
         mock_issue_api.get_current_iteration = AsyncMock(return_value=None)
         mock_issue_api.ensure_label_exists = AsyncMock(return_value=True)
-        mock_issue_api.get_or_create_issue = AsyncMock(side_effect=[
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, True),
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
-        ])
+        mock_issue_api.get_or_create_issue = AsyncMock(
+            side_effect=[
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, True),
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
+            ]
+        )
 
         # Mock for MR creation
         mock_mr_api = AsyncMock()
         mock_mr_api.find_mr_by_branch = AsyncMock(return_value=None)
-        mock_mr_api.get_or_create_mr = AsyncMock(side_effect=[
-            ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, True),
-            ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, False),
-        ])
+        mock_mr_api.get_or_create_mr = AsyncMock(
+            side_effect=[
+                ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, True),
+                ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, False),
+            ]
+        )
 
         state = _make_state(
             "common",
@@ -676,7 +712,10 @@ class TestFullWorkflowIdempotency:
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_mr_api)
         with patch("harness.gitlab.http_client.GitLabAPI", mock_api_class):
             with patch("harness.gitlab.http_client.GitLabAPIConfig"):
-                with patch("harness.gitlab.templates.render_mr_description", return_value="Test description"):
+                with patch(
+                    "harness.gitlab.templates.render_mr_description",
+                    return_value="Test description",
+                ):
                     mr_r1 = await create_mr_node(state_with_issue)
 
         # Second run - both find existing
@@ -690,7 +729,10 @@ class TestFullWorkflowIdempotency:
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_mr_api)
         with patch("harness.gitlab.http_client.GitLabAPI", mock_api_class):
             with patch("harness.gitlab.http_client.GitLabAPIConfig"):
-                with patch("harness.gitlab.templates.render_mr_description", return_value="Test description"):
+                with patch(
+                    "harness.gitlab.templates.render_mr_description",
+                    return_value="Test description",
+                ):
                     mr_r2 = await create_mr_node(state_with_issue2)
 
         assert issue_r1["issue_iid"] == issue_r2["issue_iid"] == 42
@@ -707,18 +749,22 @@ class TestFullWorkflowIdempotency:
         mock_issue_api = AsyncMock()
         mock_issue_api.get_current_iteration = AsyncMock(return_value=None)
         mock_issue_api.ensure_label_exists = AsyncMock(return_value=True)
-        mock_issue_api.get_or_create_issue = AsyncMock(side_effect=[
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, True),
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
-        ])
+        mock_issue_api.get_or_create_issue = AsyncMock(
+            side_effect=[
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, True),
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
+            ]
+        )
 
         # Mock for MR creation - first fails, second succeeds
         mock_mr_api = AsyncMock()
         mock_mr_api.find_mr_by_branch = AsyncMock(return_value=None)
-        mock_mr_api.get_or_create_mr = AsyncMock(side_effect=[
-            RuntimeError("API timeout during MR creation"),
-            ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, True),
-        ])
+        mock_mr_api.get_or_create_mr = AsyncMock(
+            side_effect=[
+                RuntimeError("API timeout during MR creation"),
+                ({"iid": 55, "web_url": "https://gitlab.example.com/-/merge_requests/55"}, True),
+            ]
+        )
 
         state = _make_state(
             "common",
@@ -744,7 +790,10 @@ class TestFullWorkflowIdempotency:
 
         with patch("harness.gitlab.http_client.GitLabAPI", mock_api_class):
             with patch("harness.gitlab.http_client.GitLabAPIConfig"):
-                with patch("harness.gitlab.templates.render_mr_description", return_value="Test description"):
+                with patch(
+                    "harness.gitlab.templates.render_mr_description",
+                    return_value="Test description",
+                ):
                     mr_result_1 = await create_mr_node(state_with_issue)
                     assert "errors" in mr_result_1
 
@@ -760,7 +809,10 @@ class TestFullWorkflowIdempotency:
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_mr_api)
         with patch("harness.gitlab.http_client.GitLabAPI", mock_api_class):
             with patch("harness.gitlab.http_client.GitLabAPIConfig"):
-                with patch("harness.gitlab.templates.render_mr_description", return_value="Test description"):
+                with patch(
+                    "harness.gitlab.templates.render_mr_description",
+                    return_value="Test description",
+                ):
                     mr_result_2 = await create_mr_node(state_with_issue)
                     assert mr_result_2["mr_iid"] == 55
 
@@ -793,8 +845,10 @@ class TestFullWorkflowIdempotency:
 
         state = _make_state("common", wave=1, wave_name="Infrastructure")
 
-        with patch("harness.gitlab.api.GitLabClient", return_value=mock_client), \
-             patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager):
+        with (
+            patch("harness.gitlab.api.GitLabClient", return_value=mock_client),
+            patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager),
+        ):
             # First run: worktree created
             wt_result_1 = await create_worktree_node(state)
             assert wt_result_1["worktree_path"] == "/tmp/sid-common"
@@ -803,10 +857,12 @@ class TestFullWorkflowIdempotency:
         mock_issue_api = AsyncMock()
         mock_issue_api.get_current_iteration = AsyncMock(return_value=None)
         mock_issue_api.ensure_label_exists = AsyncMock(return_value=True)
-        mock_issue_api.get_or_create_issue = AsyncMock(side_effect=[
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, True),
-            ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
-        ])
+        mock_issue_api.get_or_create_issue = AsyncMock(
+            side_effect=[
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, True),
+                ({"iid": 42, "web_url": "https://gitlab.example.com/-/issues/42"}, False),
+            ]
+        )
 
         mock_api_class = MagicMock()
         mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_issue_api)
@@ -818,9 +874,11 @@ class TestFullWorkflowIdempotency:
                 assert issue_1["issue_created"] is True
 
         # After molecule fix, re-run: worktree reused
-        with patch("harness.gitlab.api.GitLabClient", return_value=mock_client), \
-             patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager), \
-             patch.object(db_with_role, "get_worktree", return_value=existing_worktree):
+        with (
+            patch("harness.gitlab.api.GitLabClient", return_value=mock_client),
+            patch("harness.worktree.manager.WorktreeManager", return_value=mock_manager),
+            patch.object(db_with_role, "get_worktree", return_value=existing_worktree),
+        ):
             wt_result_2 = await create_worktree_node(state)
             assert wt_result_2["worktree_path"] == "/tmp/sid-common"
 
@@ -945,6 +1003,7 @@ class TestCacheIdempotency:
 
     def test_cache_clear_pattern(self):
         """clear_cache with pattern only clears matching entries."""
+
         @cache_result(ttl_seconds=300)
         def func_a(x: int) -> int:
             return x * 2
@@ -962,7 +1021,7 @@ class TestCacheIdempotency:
 
         # func_b should still be cached
         # Verify by checking cache is not empty
-        from harness.gitlab.idempotency import _cache
+
         remaining = [k for k in _cache if "func_b" in k]
         assert len(remaining) >= 1
 
@@ -1080,10 +1139,12 @@ class TestRoleArtifacts:
         """find_all_role_artifacts aggregates all artifact types."""
         helper = IdempotencyHelper(db_with_role)
 
-        with patch.object(helper, "find_existing_issue", return_value=sample_issue), \
-             patch.object(helper, "find_existing_mr", return_value=sample_mr), \
-             patch.object(helper, "remote_branch_exists", return_value=True), \
-             patch.object(helper, "worktree_exists", return_value=(True, "/tmp/sid-common")):
+        with (
+            patch.object(helper, "find_existing_issue", return_value=sample_issue),
+            patch.object(helper, "find_existing_mr", return_value=sample_mr),
+            patch.object(helper, "remote_branch_exists", return_value=True),
+            patch.object(helper, "worktree_exists", return_value=(True, "/tmp/sid-common")),
+        ):
             artifacts = helper.find_all_role_artifacts("common")
 
         assert artifacts.existing_issue.iid == 42

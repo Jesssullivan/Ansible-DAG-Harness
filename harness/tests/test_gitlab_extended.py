@@ -12,11 +12,10 @@ Tests marked with @pytest.mark.asyncio require async support.
 """
 
 import asyncio
-import concurrent.futures
 import json
 import threading
 import time
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -42,18 +41,15 @@ from harness.gitlab.errors import (
 from harness.gitlab.idempotency import (
     CacheEntry,
     IdempotencyHelper,
-    RoleArtifacts,
     _cache,
 )
 from harness.gitlab.merge_train import (
     MergeReadinessResult,
     MergeTrainHelper,
-    get_mr_merge_readiness,
     preflight_merge_train_check,
     wait_for_merge_train_position,
 )
 from harness.gitlab.retry import gitlab_retry, gitlab_retry_async
-
 
 # =============================================================================
 # TEST CLASS 1: IDEMPOTENCY TESTS
@@ -243,7 +239,7 @@ class TestIdempotencyExtended:
             return []
 
         with (
-            patch.object(helper, "_api_get", side_effect=mock_api_get) as mock_api,
+            patch.object(helper, "_api_get", side_effect=mock_api_get),
             patch.object(helper, "remote_branch_exists", return_value=True),
             patch.object(helper, "worktree_exists", return_value=(False, None)),
         ):
@@ -1009,12 +1005,8 @@ class TestMergeTrainExtended:
             return mock_train
 
         with (
-            patch.object(
-                MergeTrainHelper, "_get_mr_details", mock_get_mr_details
-            ),
-            patch.object(
-                MergeTrainHelper, "_get_merge_train", mock_get_train
-            ),
+            patch.object(MergeTrainHelper, "_get_mr_details", mock_get_mr_details),
+            patch.object(MergeTrainHelper, "_get_merge_train", mock_get_train),
         ):
             position = await wait_for_merge_train_position(
                 "test/project",

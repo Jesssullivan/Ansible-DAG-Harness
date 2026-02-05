@@ -1,48 +1,168 @@
+# =============================================================================
+# DAG Harness .gitignore
+# =============================================================================
+
+# =============================================================================
+# AI/LLM Tool Artifacts - NEVER COMMIT
+# =============================================================================
+CLAUDE*
+!CLAUDE.md
+.claude/
+.mcp.json
+.mcp/
+.steering/
+.hive-mind/
+.swarm/
+.cursor/
+.aider*
+.continue/
+.copilot/
+.codeium/
+.tabnine/
+.kite/
+*.ai-generated
+*.llm-output
+
+# =============================================================================
+# Secrets and Credentials - NEVER COMMIT
+# =============================================================================
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+**/secrets.yaml
+**/secrets.yml
+**/credentials.json
+.netrc
+.npmrc
+.pypirc
+id_rsa*
+id_ed25519*
+id_ecdsa*
+
+# =============================================================================
 # Python
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 *.egg-info/
 dist/
 build/
 *.egg
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+.installed.cfg
 
 # Virtual environments
 .venv/
 venv/
+ENV/
+env/
 
+# Testing/Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# Linting
+.ruff_cache/
+.pylint.d/
+
+# UV (Python package manager)
+.uv-cache/
+
+# =============================================================================
 # Database files
+# =============================================================================
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite3
 
-# Harness state
+# =============================================================================
+# Harness state (auto-generated)
+# =============================================================================
 .harness/
+harness/harness.db*
 
-# Hypothesis
-.hypothesis/
+# =============================================================================
+# Nix
+# =============================================================================
+result
+result-*
+.direnv/
+.devenv/
 
-# IDE
+# =============================================================================
+# IDE and Editor
+# =============================================================================
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-*
 
-# OS
+# =============================================================================
+# OS Generated
+# =============================================================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
 
-# Test artifacts
+# =============================================================================
+# Test/Build Artifacts
+# =============================================================================
 downloads/
-htmlcov/
-.coverage
-coverage.xml
 benchmark.json
+site/
 
-# harness state (auto-generated)
-.harness/*.db
-.harness/*.db-journal
-.harness/*.db-wal
-.harness/*.db-shm
-.harness/*.log
+# =============================================================================
+# Logs
+# =============================================================================
+*.log
+
+# =============================================================================
+# Project-Specific
+# =============================================================================
+# Local environment overrides
+.envrc

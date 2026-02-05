@@ -601,9 +601,7 @@ def init(
     no_detect_roles: bool = typer.Option(
         False, "--no-detect-roles", help="Skip automatic role detection"
     ),
-    config_path: str | None = typer.Option(
-        None, "--config", "-c", help="Path to save config file"
-    ),
+    config_path: str | None = typer.Option(None, "--config", "-c", help="Path to save config file"),
     skip_claude: bool = typer.Option(
         False, "--skip-claude", help="Skip deploying .claude/ assets (hooks, skills, settings)"
     ),
@@ -959,7 +957,7 @@ def db_migrate(
             print(json.dumps(status_info, indent=2, default=str))
             return
 
-        console.print(f"\n[bold]Migration Status[/bold]")
+        console.print("\n[bold]Migration Status[/bold]")
         console.print(f"  Current version: {status_info['current_version']}")
         console.print(
             f"  Applied: {status_info['applied_count']}/{status_info['total_migrations']}"
@@ -988,9 +986,7 @@ def db_migrate(
             )
             return
 
-        console.print(
-            f"[blue]Rolling back from version {current} to {rollback_to}...[/blue]"
-        )
+        console.print(f"[blue]Rolling back from version {current} to {rollback_to}...[/blue]")
         results = runner.rollback(rollback_to)
 
         if json_output:
@@ -1908,8 +1904,6 @@ def hotl_approve(
         harness hotl approve common
         harness hotl approve ems_web_app
     """
-    from harness.hotl.orchestrator import HOTLOrchestrator
-    from harness.hotl.queue import QueueItemStatus, RoleQueue
 
     db = get_db()
 

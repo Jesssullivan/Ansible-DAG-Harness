@@ -5,9 +5,8 @@ ordered by wave number with configurable concurrency limits.
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from harness.db.state import StateDB
 
@@ -32,10 +31,10 @@ class QueueItem:
     role_name: str
     wave: int
     status: QueueItemStatus = QueueItemStatus.PENDING
-    execution_id: Optional[int] = None
-    issue_iid: Optional[int] = None
-    mr_iid: Optional[int] = None
-    error: Optional[str] = None
+    execution_id: int | None = None
+    issue_iid: int | None = None
+    mr_iid: int | None = None
+    error: str | None = None
 
 
 class RoleQueue:
@@ -219,9 +218,7 @@ class RoleQueue:
         """
         status_counts = {}
         for status in QueueItemStatus:
-            status_counts[status.value] = sum(
-                1 for item in self._items if item.status == status
-            )
+            status_counts[status.value] = sum(1 for item in self._items if item.status == status)
 
         waves = sorted({item.wave for item in self._items}) if self._items else []
 

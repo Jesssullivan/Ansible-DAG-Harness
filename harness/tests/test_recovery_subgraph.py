@@ -30,7 +30,6 @@ from harness.dag.recovery_subgraph import (
     verify_fix_node,
 )
 
-
 # =============================================================================
 # RECOVERY CONFIG TESTS
 # =============================================================================
@@ -101,9 +100,14 @@ class TestRecoveryConfig:
     def test_all_configured_nodes_exist(self):
         """All configured nodes should be known workflow nodes."""
         known_nodes = {
-            "create_worktree", "run_molecule", "run_pytest",
-            "validate_deploy", "create_commit", "push_branch",
-            "create_issue", "create_mr",
+            "create_worktree",
+            "run_molecule",
+            "run_pytest",
+            "validate_deploy",
+            "create_commit",
+            "push_branch",
+            "create_issue",
+            "create_mr",
         }
         for node_name in NODE_RECOVERY_CONFIGS:
             assert node_name in known_nodes, f"Unknown node in config: {node_name}"
@@ -546,7 +550,7 @@ class TestRecoverySubgraphConstruction:
         """Subgraph should have all four recovery nodes."""
         graph = create_recovery_subgraph()
         # Check node names exist by compiling and checking
-        compiled = graph.compile()
+        graph.compile()
         # The graph should have the nodes defined
         node_names = set(graph.nodes.keys())
         expected = {"analyze_failure", "plan_fix", "execute_fix", "verify_fix"}
@@ -624,9 +628,7 @@ class TestShouldAttemptRecoveryV2:
 
         # create_worktree has max_iterations=5
         state = {
-            "recovery_attempts": [
-                {"node": "create_worktree", "hint": "fix"} for _ in range(4)
-            ]
+            "recovery_attempts": [{"node": "create_worktree", "hint": "fix"} for _ in range(4)]
         }
         result = should_attempt_recovery_v2(state, "create_worktree")
         assert result is True  # 4 < 5

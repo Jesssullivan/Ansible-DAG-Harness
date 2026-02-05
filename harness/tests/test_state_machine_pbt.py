@@ -12,10 +12,9 @@ Test Categories:
 """
 
 import operator
-from typing import Literal
 
 import pytest
-from hypothesis import assume, given, settings, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from harness.dag.langgraph_engine import (
@@ -36,7 +35,6 @@ from harness.dag.langgraph_engine import (
     should_continue_after_worktree,
 )
 from tests.strategies import role_name_strategy
-
 
 # =============================================================================
 # STRATEGIES
@@ -97,12 +95,16 @@ def box_up_state_strategy(draw):
         explicit_deps=draw(st.lists(st.text(min_size=1, max_size=30), max_size=5)),
         implicit_deps=draw(st.lists(st.text(min_size=1, max_size=30), max_size=5)),
         reverse_deps=draw(st.lists(st.text(min_size=1, max_size=30), max_size=5)),
-        credentials=draw(st.lists(st.fixed_dictionaries({"name": st.text(min_size=1, max_size=20)}), max_size=3)),
+        credentials=draw(
+            st.lists(st.fixed_dictionaries({"name": st.text(min_size=1, max_size=20)}), max_size=3)
+        ),
         tags=draw(st.lists(st.text(min_size=1, max_size=20), max_size=5)),
         blocking_deps=draw(st.lists(st.text(min_size=1, max_size=30), max_size=3)),
         worktree_path=draw(st.text(min_size=0, max_size=100)),
         branch=draw(st.text(min_size=0, max_size=50)),
-        commit_sha=draw(st.one_of(st.none(), st.text(alphabet="0123456789abcdef", min_size=40, max_size=40))),
+        commit_sha=draw(
+            st.one_of(st.none(), st.text(alphabet="0123456789abcdef", min_size=40, max_size=40))
+        ),
         commit_message=draw(st.one_of(st.none(), st.text(max_size=200))),
         pushed=draw(st.booleans()),
         molecule_passed=draw(st.one_of(st.none(), st.booleans())),
@@ -116,8 +118,12 @@ def box_up_state_strategy(draw):
         deploy_skipped=draw(st.booleans()),
         all_tests_passed=draw(st.one_of(st.none(), st.booleans())),
         parallel_tests_completed=draw(st.lists(st.text(min_size=1, max_size=20), max_size=5)),
-        test_phase_start_time=draw(st.one_of(st.none(), st.floats(min_value=0.0, max_value=1e12, allow_nan=False))),
-        test_phase_duration=draw(st.one_of(st.none(), st.floats(min_value=0.0, max_value=3600.0, allow_nan=False))),
+        test_phase_start_time=draw(
+            st.one_of(st.none(), st.floats(min_value=0.0, max_value=1e12, allow_nan=False))
+        ),
+        test_phase_duration=draw(
+            st.one_of(st.none(), st.floats(min_value=0.0, max_value=3600.0, allow_nan=False))
+        ),
         parallel_execution_enabled=draw(st.booleans()),
         issue_url=draw(st.one_of(st.none(), st.text(min_size=1, max_size=100))),
         issue_iid=draw(st.one_of(st.none(), st.integers(min_value=1, max_value=10000))),
@@ -127,17 +133,47 @@ def box_up_state_strategy(draw):
         mr_created=draw(st.booleans()),
         reviewers_set=draw(st.booleans()),
         iteration_assigned=draw(st.booleans()),
-        merge_train_status=draw(st.one_of(st.none(), st.sampled_from(["added", "fallback", "skipped", "error"]))),
+        merge_train_status=draw(
+            st.one_of(st.none(), st.sampled_from(["added", "fallback", "skipped", "error"]))
+        ),
         branch_existed=draw(st.booleans()),
         current_node=draw(st.sampled_from(ALL_NODE_NAMES)),
         completed_nodes=completed,
         errors=errors,
-        test_results=draw(st.lists(st.fixed_dictionaries({"test": st.text(min_size=1, max_size=20), "passed": st.booleans()}), max_size=3)),
+        test_results=draw(
+            st.lists(
+                st.fixed_dictionaries(
+                    {"test": st.text(min_size=1, max_size=20), "passed": st.booleans()}
+                ),
+                max_size=3,
+            )
+        ),
         git_operations=draw(st.lists(st.text(min_size=1, max_size=50), max_size=5)),
-        api_calls=draw(st.lists(st.fixed_dictionaries({"url": st.text(min_size=1, max_size=50)}), max_size=3)),
-        timing_metrics=draw(st.lists(st.fixed_dictionaries({"node": st.text(min_size=1, max_size=20), "ms": st.integers(min_value=0, max_value=60000)}), max_size=5)),
-        state_snapshots=draw(st.lists(st.fixed_dictionaries({"step": st.integers(min_value=0, max_value=100)}), max_size=10)),
-        summary=draw(st.one_of(st.none(), st.fixed_dictionaries({"status": st.text(min_size=1, max_size=20)}))),
+        api_calls=draw(
+            st.lists(st.fixed_dictionaries({"url": st.text(min_size=1, max_size=50)}), max_size=3)
+        ),
+        timing_metrics=draw(
+            st.lists(
+                st.fixed_dictionaries(
+                    {
+                        "node": st.text(min_size=1, max_size=20),
+                        "ms": st.integers(min_value=0, max_value=60000),
+                    }
+                ),
+                max_size=5,
+            )
+        ),
+        state_snapshots=draw(
+            st.lists(
+                st.fixed_dictionaries({"step": st.integers(min_value=0, max_value=100)}),
+                max_size=10,
+            )
+        ),
+        summary=draw(
+            st.one_of(
+                st.none(), st.fixed_dictionaries({"status": st.text(min_size=1, max_size=20)})
+            )
+        ),
         human_approved=draw(st.one_of(st.none(), st.booleans())),
         human_rejection_reason=draw(st.one_of(st.none(), st.text(max_size=200))),
         awaiting_human_input=draw(st.booleans()),
@@ -157,9 +193,7 @@ def state_update_strategy(draw):
 
     # Optionally include errors
     if draw(st.booleans()):
-        update["errors"] = draw(
-            st.lists(st.text(min_size=1, max_size=80), min_size=0, max_size=3)
-        )
+        update["errors"] = draw(st.lists(st.text(min_size=1, max_size=80), min_size=0, max_size=3))
 
     # Optionally include test results
     if draw(st.booleans()):
@@ -252,9 +286,9 @@ class TestStateInvariants:
         # The strategy generates unique completed_nodes.
         # Verify operator.add reducer + set dedup in real usage preserves this.
         completed = state["completed_nodes"]
-        assert len(completed) == len(set(completed)), (
-            f"Duplicate completed_nodes found: {completed}"
-        )
+        assert len(completed) == len(
+            set(completed)
+        ), f"Duplicate completed_nodes found: {completed}"
 
     @pytest.mark.pbt
     @given(state=box_up_state_strategy())
@@ -302,10 +336,20 @@ class TestStateInvariants:
     def test_list_fields_never_none(self, state):
         """All Annotated[list, ...] fields must be lists, never None."""
         list_fields = [
-            "explicit_deps", "implicit_deps", "reverse_deps", "credentials",
-            "tags", "blocking_deps", "completed_nodes", "errors",
-            "test_results", "git_operations", "api_calls", "timing_metrics",
-            "state_snapshots", "parallel_tests_completed",
+            "explicit_deps",
+            "implicit_deps",
+            "reverse_deps",
+            "credentials",
+            "tags",
+            "blocking_deps",
+            "completed_nodes",
+            "errors",
+            "test_results",
+            "git_operations",
+            "api_calls",
+            "timing_metrics",
+            "state_snapshots",
+            "parallel_tests_completed",
         ]
         for field in list_fields:
             value = state.get(field)
@@ -352,9 +396,12 @@ class TestStateTransitions:
     def test_no_errors_continues(self, state):
         """When errors is empty, error-checking routers should continue to next node."""
         assume(len(state["errors"]) == 0)
+        # Also ensure no recovery flags set
+        assume(not state.get("worktree_force_recreate"))
+        assume(not state.get("branch_force_recreate"))
         assert should_continue_after_validation(state) == "analyze_deps"
         assert should_continue_after_deps(state) == "check_reverse_deps"
-        assert should_continue_after_worktree(state) == "parallel_tests"
+        assert should_continue_after_worktree(state) == "run_molecule"  # Sequential mode
         assert should_continue_after_commit(state) == "push_branch"
 
     @pytest.mark.pbt
@@ -587,7 +634,12 @@ class TestGraphTraversal:
             "validate_role": ["analyze_deps", "notify_failure"],
             "analyze_deps": ["check_reverse_deps", "notify_failure"],
             "check_reverse_deps": ["create_worktree", "notify_failure"],
-            "create_worktree": ["run_molecule", "run_pytest", "merge_test_results", "notify_failure"],
+            "create_worktree": [
+                "run_molecule",
+                "run_pytest",
+                "merge_test_results",
+                "notify_failure",
+            ],
             "run_molecule": ["merge_test_results"],
             "run_pytest": ["merge_test_results"],
             "merge_test_results": ["validate_deploy", "notify_failure"],
@@ -620,9 +672,7 @@ class TestGraphTraversal:
             return all(can_reach_terminal(n, visited.copy()) for n in neighbors)
 
         for node in edges:
-            assert can_reach_terminal(node, set()), (
-                f"Node '{node}' cannot reach a terminal state"
-            )
+            assert can_reach_terminal(node, set()), f"Node '{node}' cannot reach a terminal state"
 
     @pytest.mark.pbt
     def test_no_orphan_nodes(self):
@@ -655,8 +705,7 @@ class TestGraphTraversal:
             source, target = path[i], path[i + 1]
             neighbors = edges.get(source, [])
             assert target in neighbors, (
-                f"Invalid edge {source} -> {target}. "
-                f"Valid targets from {source}: {neighbors}"
+                f"Invalid edge {source} -> {target}. " f"Valid targets from {source}: {neighbors}"
             )
 
     @pytest.mark.pbt
@@ -683,12 +732,18 @@ class TestGraphTraversal:
         at the merge train stage are reported via report_summary.
         """
         edges = self._get_graph_edges()
-        terminal = {"report_summary", "notify_failure"}
         # Nodes that use conditional routing (can potentially fail)
         conditional_nodes = {
-            "validate_role", "analyze_deps", "check_reverse_deps",
-            "create_worktree", "merge_test_results", "validate_deploy",
-            "create_commit", "push_branch", "create_issue", "human_approval",
+            "validate_role",
+            "analyze_deps",
+            "check_reverse_deps",
+            "create_worktree",
+            "merge_test_results",
+            "validate_deploy",
+            "create_commit",
+            "push_branch",
+            "create_issue",
+            "human_approval",
         }
 
         def can_reach(node: str, target: str, visited: set[str]) -> bool:
@@ -700,9 +755,9 @@ class TestGraphTraversal:
             return any(can_reach(n, target, visited.copy()) for n in edges.get(node, []))
 
         for node in conditional_nodes:
-            assert can_reach(node, "notify_failure", set()), (
-                f"Conditional node '{node}' cannot reach notify_failure"
-            )
+            assert can_reach(
+                node, "notify_failure", set()
+            ), f"Conditional node '{node}' cannot reach notify_failure"
 
     @pytest.mark.pbt
     def test_graph_is_acyclic(self):
@@ -723,9 +778,7 @@ class TestGraphTraversal:
 
         visited: set[str] = set()
         for node in edges:
-            assert not has_cycle(node, set(), visited), (
-                f"Cycle detected involving node '{node}'"
-            )
+            assert not has_cycle(node, set(), visited), f"Cycle detected involving node '{node}'"
 
     @pytest.mark.pbt
     def test_graph_construction_succeeds(self):

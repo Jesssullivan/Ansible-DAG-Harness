@@ -1,11 +1,23 @@
 """GitLab API integration."""
 
-from harness.gitlab.api import GitLabClient
-from harness.gitlab.http_client import (
-    GitLabAPI,
-    GitLabAPIConfig,
-    GitLabAPIError,
+from harness.gitlab.advanced import (
+    ITERATION_CADENCE_QUERY,
+    # GraphQL queries
+    ITERATION_QUERY,
+    MERGE_TRAIN_QUERY,
+    PROJECT_MERGE_REQUESTS_QUERY,
+    GitLabIterationManager,
+    GitLabMergeTrainManager,
+    GitLabProjectManager,
+    build_gid,
+    create_iteration_manager,
+    create_merge_train_manager,
+    # Convenience functions
+    create_project_manager,
+    encode_project_path,
+    parse_gid,
 )
+from harness.gitlab.api import GitLabClient
 from harness.gitlab.errors import (
     GitLabAPIError,
     GitLabAuthenticationError,
@@ -15,6 +27,15 @@ from harness.gitlab.errors import (
     GitLabServerError,
     GitLabTimeoutError,
     parse_gitlab_error,
+)
+from harness.gitlab.graphql import (
+    GitLabGraphQLClient,
+    GitLabGraphQLError,
+    GraphQLErrorLocation,
+)
+from harness.gitlab.http_client import (
+    GitLabAPI,
+    GitLabAPIConfig,
 )
 from harness.gitlab.idempotency import (
     IdempotencyHelper,
@@ -34,34 +55,6 @@ from harness.gitlab.labels import (
     LabelManager,
     MilestoneManager,
 )
-from harness.gitlab.retry import (
-    check_response,
-    check_response_async,
-    gitlab_retry,
-    gitlab_retry_async,
-)
-from harness.gitlab.advanced import (
-    GitLabProjectManager,
-    GitLabIterationManager,
-    GitLabMergeTrainManager,
-    encode_project_path,
-    parse_gid,
-    build_gid,
-    # GraphQL queries
-    ITERATION_QUERY,
-    PROJECT_MERGE_REQUESTS_QUERY,
-    MERGE_TRAIN_QUERY,
-    ITERATION_CADENCE_QUERY,
-    # Convenience functions
-    create_project_manager,
-    create_iteration_manager,
-    create_merge_train_manager,
-)
-from harness.gitlab.graphql import (
-    GitLabGraphQLClient,
-    GitLabGraphQLError,
-    GraphQLErrorLocation,
-)
 from harness.gitlab.merge_ordering import (
     MergeOrder,
     MergeOrderingService,
@@ -70,10 +63,16 @@ from harness.gitlab.merge_ordering import (
 from harness.gitlab.merge_train import (
     MergeReadinessResult,
     MergeTrainHelper,
-    get_mr_merge_readiness,
-    wait_for_merge_train_position,
-    preflight_merge_train_check,
     create_merge_train_helper,
+    get_mr_merge_readiness,
+    preflight_merge_train_check,
+    wait_for_merge_train_position,
+)
+from harness.gitlab.retry import (
+    check_response,
+    check_response_async,
+    gitlab_retry,
+    gitlab_retry_async,
 )
 from harness.gitlab.status import (
     FullStatus,

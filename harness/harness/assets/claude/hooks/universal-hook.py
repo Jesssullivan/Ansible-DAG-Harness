@@ -11,11 +11,9 @@ Environment variables:
     HARNESS_HOOK_STRICT: Set to "1" to enforce strict policies
 """
 
-import json
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
 
 
 def log_debug(message: str):

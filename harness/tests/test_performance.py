@@ -8,19 +8,16 @@ where performance may vary due to shared resources.
 
 import json
 import time
-from pathlib import Path
 
 import pytest
 
 from harness.dag.langgraph_engine import (
-    BoxUpRoleState,
     create_box_up_role_graph,
     create_initial_state,
 )
 from harness.dag.store import HarnessStore
 from harness.db.models import DependencyType, Role, RoleDependency
 from harness.db.state import StateDB
-
 
 # =============================================================================
 # FIXTURES
@@ -165,9 +162,9 @@ class TestPerformanceBenchmarks:
 
         assert restored is not None
         assert restored["role_name"] == "common"
-        assert total_elapsed < 0.100, (
-            f"Checkpoint save+restore {total_elapsed*1000:.2f}ms exceeds 100ms"
-        )
+        assert (
+            total_elapsed < 0.100
+        ), f"Checkpoint save+restore {total_elapsed*1000:.2f}ms exceeds 100ms"
 
     def test_store_put_get_under_5ms(self, store):
         """HarnessStore put/get should complete under 5ms."""
@@ -184,9 +181,7 @@ class TestPerformanceBenchmarks:
             store.get(("roles", "common"), f"run_{i}")
         elapsed = (time.perf_counter() - start) / iterations
 
-        assert elapsed < 0.005, (
-            f"Average put+get time {elapsed*1000:.2f}ms exceeds 5ms"
-        )
+        assert elapsed < 0.005, f"Average put+get time {elapsed*1000:.2f}ms exceeds 5ms"
 
     def test_state_serialization_under_1ms(self):
         """BoxUpRoleState serialization should complete under 1ms."""
@@ -206,9 +201,7 @@ class TestPerformanceBenchmarks:
             json.loads(serialized)
         elapsed = (time.perf_counter() - start) / iterations
 
-        assert elapsed < 0.001, (
-            f"Average serialization time {elapsed*1000:.3f}ms exceeds 1ms"
-        )
+        assert elapsed < 0.001, f"Average serialization time {elapsed*1000:.3f}ms exceeds 1ms"
 
     def test_namespace_search_under_50ms(self, store):
         """Store namespace search should complete under 50ms even with 1000 entries."""
@@ -228,13 +221,11 @@ class TestPerformanceBenchmarks:
         elapsed = time.perf_counter() - start
 
         assert len(results) > 0
-        assert elapsed < 0.050, (
-            f"Search time {elapsed*1000:.2f}ms exceeds 50ms for 1000 entries"
-        )
+        assert elapsed < 0.050, f"Search time {elapsed*1000:.2f}ms exceeds 50ms for 1000 entries"
 
     def test_batch_operations_faster_than_individual(self, store):
         """Batch operations should be faster than individual calls."""
-        from langgraph.store.base import GetOp, PutOp
+        from langgraph.store.base import GetOp
 
         # Populate data
         for i in range(50):
@@ -279,9 +270,7 @@ class TestPerformanceBenchmarks:
         elapsed = (time.perf_counter() - start) / iterations
 
         assert graph is not None
-        assert elapsed < 0.500, (
-            f"Graph compilation {elapsed*1000:.2f}ms exceeds 500ms"
-        )
+        assert elapsed < 0.500, f"Graph compilation {elapsed*1000:.2f}ms exceeds 500ms"
 
     def test_dependency_resolution_under_100ms(self, db_with_roles):
         """Full dependency resolution for all roles under 100ms."""
@@ -294,8 +283,8 @@ class TestPerformanceBenchmarks:
 
         start = time.perf_counter()
         for role in roles:
-            deps = db.get_dependencies(role.name, transitive=True)
-            reverse_deps = db.get_reverse_dependencies(role.name, transitive=False)
+            db.get_dependencies(role.name, transitive=True)
+            db.get_reverse_dependencies(role.name, transitive=False)
         elapsed = time.perf_counter() - start
 
         assert elapsed < 0.100, (
@@ -324,7 +313,7 @@ class TestPerformanceBenchmarks:
         # Time listing filtered roles (should be faster)
         start = time.perf_counter()
         for _ in range(iterations):
-            wave_roles = db.list_roles(wave=0)
+            db.list_roles(wave=0)
         elapsed_filtered = (time.perf_counter() - start) / iterations
 
         # Filtered should be faster or comparable
@@ -345,9 +334,7 @@ class TestPerformanceBenchmarks:
         elapsed = time.perf_counter() - start
 
         assert len(namespaces) > 0
-        assert elapsed < 0.020, (
-            f"Namespace listing {elapsed*1000:.2f}ms exceeds 20ms"
-        )
+        assert elapsed < 0.020, f"Namespace listing {elapsed*1000:.2f}ms exceeds 20ms"
 
     def test_initial_state_creation_under_1ms(self):
         """create_initial_state should complete under 1ms."""
@@ -361,6 +348,4 @@ class TestPerformanceBenchmarks:
         elapsed = (time.perf_counter() - start) / iterations
 
         assert state["role_name"] == "common"
-        assert elapsed < 0.001, (
-            f"Initial state creation {elapsed*1000:.3f}ms exceeds 1ms"
-        )
+        assert elapsed < 0.001, f"Initial state creation {elapsed*1000:.3f}ms exceeds 1ms"

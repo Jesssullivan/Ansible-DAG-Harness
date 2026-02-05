@@ -90,7 +90,9 @@ def deploy_file(relative_path: str, dest: Path, executable: bool = False) -> Non
         dest.chmod(dest.stat().st_mode | 0o111)
 
 
-def deploy_directory(relative_dir: str, dest_dir: Path, executable_extensions: set[str] | None = None) -> list[Path]:
+def deploy_directory(
+    relative_dir: str, dest_dir: Path, executable_extensions: set[str] | None = None
+) -> list[Path]:
     """Deploy all assets from a bundled directory to a destination.
 
     Args:

@@ -12,7 +12,6 @@ from langgraph.types import Send
 
 from harness.dag.langgraph_state import BoxUpRoleState
 
-
 # ============================================================================
 # PARALLEL TEST ROUTING (Task #21)
 # ============================================================================
@@ -166,7 +165,10 @@ def should_continue_after_deploy(
     from harness.dag.recovery_config import get_recovery_config
 
     # Check if recovery resolved the issue (v0.6.0)
-    if state.get("recovery_result") == "resolved" and state.get("last_error_node") == "validate_deploy":
+    if (
+        state.get("recovery_result") == "resolved"
+        and state.get("last_error_node") == "validate_deploy"
+    ):
         return "create_commit"
 
     # Check for recovery loop - path was corrected (tier 1 inline)
@@ -237,9 +239,7 @@ def should_continue_after_human_approval(
 
 def route_after_recovery(
     state: BoxUpRoleState,
-) -> Literal[
-    "create_worktree", "validate_deploy", "run_molecule", "run_pytest", "notify_failure"
-]:
+) -> Literal["create_worktree", "validate_deploy", "run_molecule", "run_pytest", "notify_failure"]:
     """
     Route after recovery subgraph completes.
 
@@ -255,7 +255,10 @@ def route_after_recovery(
     if result == "resolved":
         # Route back to the node that failed so it can retry
         valid_targets = {
-            "create_worktree", "validate_deploy", "run_molecule", "run_pytest",
+            "create_worktree",
+            "validate_deploy",
+            "run_molecule",
+            "run_pytest",
         }
         if failed_node in valid_targets:
             return failed_node

@@ -350,7 +350,7 @@ class HOTLClaudeIntegration:
         if session.context:
             parts.append("## Context")
             for key, value in session.context.items():
-                if isinstance(value, (dict, list)):
+                if isinstance(value, dict | list):
                     parts.append(f"**{key}**: {json.dumps(value, indent=2)}")
                 else:
                     parts.append(f"**{key}**: {value}")

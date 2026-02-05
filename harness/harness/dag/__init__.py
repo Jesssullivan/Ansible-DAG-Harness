@@ -76,6 +76,16 @@ from harness.dag.error_resolution import (
     should_attempt_recovery_v2,
 )
 
+# LangGraph implementation (recommended)
+from harness.dag.langgraph_engine import (
+    BoxUpRoleState,
+    LangGraphWorkflowRunner,
+    create_initial_state,
+)
+from harness.dag.langgraph_engine import (
+    create_box_up_role_graph as create_langgraph_workflow,
+)
+
 # Recovery configuration and subgraph (v0.6.0)
 from harness.dag.recovery_config import (
     DEFAULT_RECOVERY_CONFIG,
@@ -89,16 +99,6 @@ from harness.dag.recovery_subgraph import (
     RecoveryState,
     create_recovery_subgraph,
     escalate_to_human,
-)
-
-# LangGraph implementation (recommended)
-from harness.dag.langgraph_engine import (
-    BoxUpRoleState,
-    LangGraphWorkflowRunner,
-    create_initial_state,
-)
-from harness.dag.langgraph_engine import (
-    create_box_up_role_graph as create_langgraph_workflow,
 )
 
 # Subgraph composition (Task #22)

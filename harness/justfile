@@ -133,3 +133,55 @@ build:
 # Show version
 version:
     @grep '^__version__' harness/__init__.py
+
+# =============================================================================
+# TYPE CHECKING
+# =============================================================================
+
+# Run mypy type checker
+typecheck:
+    uv run mypy harness/ --config-file pyproject.toml
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+
+# Serve docs locally
+docs:
+    cd .. && mkdocs serve
+
+# Build docs
+docs-build:
+    cd .. && mkdocs build --strict
+
+# =============================================================================
+# MOLECULE/ANSIBLE
+# =============================================================================
+
+# Run molecule test on sample role
+molecule-test:
+    cd tests/fixtures/sample_role && molecule test
+
+# Run molecule converge
+molecule-converge:
+    cd tests/fixtures/sample_role && molecule converge
+
+# =============================================================================
+# MCP SERVER
+# =============================================================================
+
+# Start MCP server for development
+mcp-serve:
+    uv run harness mcp-server
+
+# =============================================================================
+# PRE-COMMIT
+# =============================================================================
+
+# Install pre-commit hooks
+pre-commit-install:
+    uv run pre-commit install
+
+# Run pre-commit on all files
+pre-commit-all:
+    uv run pre-commit run --all-files

@@ -508,7 +508,7 @@ Use these tools to communicate with the HOTL supervisor:
         if session.context:
             context_section = "\n## Task Context\n"
             for key, value in session.context.items():
-                if isinstance(value, (dict, list)):
+                if isinstance(value, dict | list):
                     context_section += f"**{key}**: {json.dumps(value, indent=2)}\n"
                 else:
                     context_section += f"**{key}**: {value}\n"

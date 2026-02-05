@@ -12,7 +12,6 @@ This module extends the basic merge train operations in advanced.py with:
 """
 
 import asyncio
-import json
 import logging
 from dataclasses import dataclass, field
 
@@ -109,9 +108,7 @@ class MergeReadinessResult:
             "already_in_train": "Already in merge train",
         }
 
-        descriptions = [
-            blocker_descriptions.get(b, b) for b in self.blockers
-        ]
+        descriptions = [blocker_descriptions.get(b, b) for b in self.blockers]
         return "; ".join(descriptions)
 
 
@@ -131,9 +128,7 @@ class MergeTrainHelper(GitLabAsyncBase):
     def __init__(self, config: GitLabAsyncConfig | None = None):
         super().__init__(config)
 
-    async def _get_mr_details(
-        self, project_path: str, mr_iid: int
-    ) -> dict:
+    async def _get_mr_details(self, project_path: str, mr_iid: int) -> dict:
         """
         Get detailed merge request information.
 
@@ -147,9 +142,7 @@ class MergeTrainHelper(GitLabAsyncBase):
         encoded = encode_project_path(project_path)
         return await self._api_get(f"projects/{encoded}/merge_requests/{mr_iid}")
 
-    async def _get_mr_approvals(
-        self, project_path: str, mr_iid: int
-    ) -> dict:
+    async def _get_mr_approvals(self, project_path: str, mr_iid: int) -> dict:
         """
         Get merge request approval status.
 
@@ -163,9 +156,7 @@ class MergeTrainHelper(GitLabAsyncBase):
         encoded = encode_project_path(project_path)
         return await self._api_get(f"projects/{encoded}/merge_requests/{mr_iid}/approvals")
 
-    async def _get_mr_pipelines(
-        self, project_path: str, mr_iid: int
-    ) -> list:
+    async def _get_mr_pipelines(self, project_path: str, mr_iid: int) -> list:
         """
         Get pipelines for a merge request.
 
@@ -179,9 +170,7 @@ class MergeTrainHelper(GitLabAsyncBase):
         encoded = encode_project_path(project_path)
         return await self._api_get(f"projects/{encoded}/merge_requests/{mr_iid}/pipelines")
 
-    async def _get_merge_train(
-        self, project_path: str, target_branch: str = "main"
-    ) -> list:
+    async def _get_merge_train(self, project_path: str, target_branch: str = "main") -> list:
         """
         Get the merge train queue for a target branch.
 
@@ -193,9 +182,7 @@ class MergeTrainHelper(GitLabAsyncBase):
             List of merge train entries
         """
         encoded = encode_project_path(project_path)
-        return await self._api_get(
-            f"projects/{encoded}/merge_trains?target_branch={target_branch}"
-        )
+        return await self._api_get(f"projects/{encoded}/merge_trains?target_branch={target_branch}")
 
     async def _is_mr_in_train(
         self, project_path: str, mr_iid: int, target_branch: str = "main"
@@ -266,8 +253,7 @@ async def get_mr_merge_readiness(
         pipelines_task = helper._get_mr_pipelines(project_path, mr_iid)
 
         mr_data, approvals_data, pipelines = await asyncio.gather(
-            mr_task, approvals_task, pipelines_task,
-            return_exceptions=True
+            mr_task, approvals_task, pipelines_task, return_exceptions=True
         )
 
         # Handle errors from parallel requests
@@ -484,9 +470,7 @@ async def preflight_merge_train_check(
     if can_add:
         logger.info(f"MR !{mr_iid} passes pre-flight checks for merge train")
     else:
-        logger.warning(
-            f"MR !{mr_iid} failed pre-flight checks: {critical_blockers}"
-        )
+        logger.warning(f"MR !{mr_iid} failed pre-flight checks: {critical_blockers}")
 
     return (can_add, critical_blockers)
 

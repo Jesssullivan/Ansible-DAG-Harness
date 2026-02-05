@@ -265,10 +265,7 @@ class MergeOrderingService:
                 f"Returning partial order with remaining MRs appended."
             )
             # Append remaining nodes in wave/iid order
-            remaining = sorted(
-                cycle_nodes,
-                key=lambda iid: (self._get_wave_for_mr(iid), iid)
-            )
+            remaining = sorted(cycle_nodes, key=lambda iid: (self._get_wave_for_mr(iid), iid))
             result.extend(remaining)
 
         return result
@@ -477,9 +474,7 @@ class MergeOrderingService:
             MR data dict or None if not found
         """
         try:
-            return self._api_get(
-                f"projects/{self._project_path_encoded}/merge_requests/{mr_iid}"
-            )
+            return self._api_get(f"projects/{self._project_path_encoded}/merge_requests/{mr_iid}")
         except RuntimeError:
             return None
 
@@ -487,9 +482,7 @@ class MergeOrderingService:
     # ORDERING VIOLATION DETECTION
     # =========================================================================
 
-    def check_ordering_violations(
-        self, mr_iid: int, current_train: list[dict]
-    ) -> list[str]:
+    def check_ordering_violations(self, mr_iid: int, current_train: list[dict]) -> list[str]:
         """
         Check if an MR should be merged before others already in the train.
 
@@ -629,10 +622,7 @@ class MergeOrderingService:
             for entry in current_train:
                 entry_mr = entry.get("merge_request", {})
                 if entry_mr.get("iid") == mr_iid:
-                    train_iids = [
-                        e.get("merge_request", {}).get("iid")
-                        for e in current_train
-                    ]
+                    train_iids = [e.get("merge_request", {}).get("iid") for e in current_train]
                     position = train_iids.index(mr_iid) + 1 if mr_iid in train_iids else None
                     return PlacementResult(
                         success=True,
@@ -678,7 +668,9 @@ class MergeOrderingService:
                     blocking_mrs.append(entry_mr.get("iid"))
 
             # Calculate ideal position using existing method
-            ideal_position = self.suggest_train_position(mr_iid, current_train) + 1  # Convert to 1-indexed
+            ideal_position = (
+                self.suggest_train_position(mr_iid, current_train) + 1
+            )  # Convert to 1-indexed
 
             # Check for ordering violations
             warnings = self.check_ordering_violations(mr_iid, current_train)

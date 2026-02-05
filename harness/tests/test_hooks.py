@@ -903,9 +903,7 @@ class TestToolLogger:
 
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT * FROM tool_invocations WHERE id = ?", (row_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM tool_invocations WHERE id = ?", (row_id,)).fetchone()
         conn.close()
 
         assert row is not None
@@ -942,9 +940,7 @@ class TestToolLogger:
 
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT * FROM tool_invocations WHERE id = ?", (pre_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM tool_invocations WHERE id = ?", (pre_id,)).fetchone()
         conn.close()
 
         assert row["status"] == "completed"
@@ -980,16 +976,8 @@ class TestToolLogger:
         from harness.hooks.tool_logger import check_capability
 
         # With destructive capability, dangerous patterns should be allowed
-        assert (
-            check_capability("Bash", {"command": "rm -rf /tmp/old"}, ["destructive"])
-            is True
-        )
-        assert (
-            check_capability(
-                "Bash", {"command": "git push --force"}, ["destructive"]
-            )
-            is True
-        )
+        assert check_capability("Bash", {"command": "rm -rf /tmp/old"}, ["destructive"]) is True
+        assert check_capability("Bash", {"command": "git push --force"}, ["destructive"]) is True
 
     def test_track_file_change(self, db_path):
         """Test that file changes are recorded in the database."""
@@ -1010,9 +998,7 @@ class TestToolLogger:
 
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT * FROM file_changes WHERE id = ?", (row_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM file_changes WHERE id = ?", (row_id,)).fetchone()
         conn.close()
 
         assert row is not None
@@ -1049,9 +1035,7 @@ class TestToolLogger:
 
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT * FROM tool_invocations WHERE id = ?", (row_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM tool_invocations WHERE id = ?", (row_id,)).fetchone()
         conn.close()
 
         assert row["status"] == "blocked"
@@ -1078,12 +1062,13 @@ class TestPreToolUseScript:
 
     def test_pre_hook_allows_normal(self, tmp_path):
         """Test that pre-hook exits 0 for normal tool invocations."""
-        import subprocess
 
-        hook_data = json.dumps({
-            "tool_name": "Bash",
-            "tool_input": {"command": "git status"},
-        })
+        hook_data = json.dumps(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "git status"},
+            }
+        )
 
         result = subprocess.run(
             [
@@ -1102,12 +1087,13 @@ class TestPreToolUseScript:
 
     def test_pre_hook_blocks_dangerous(self, tmp_path):
         """Test that pre-hook exits 2 for dangerous commands."""
-        import subprocess
 
-        hook_data = json.dumps({
-            "tool_name": "Bash",
-            "tool_input": {"command": "rm -rf /important/data"},
-        })
+        hook_data = json.dumps(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "rm -rf /important/data"},
+            }
+        )
 
         result = subprocess.run(
             [
@@ -1129,12 +1115,13 @@ class TestPreToolUseScript:
 
     def test_pre_hook_allows_write_tool(self, tmp_path):
         """Test that pre-hook allows non-Bash tools."""
-        import subprocess
 
-        hook_data = json.dumps({
-            "tool_name": "Write",
-            "tool_input": {"file_path": "/tmp/test.txt", "content": "hello"},
-        })
+        hook_data = json.dumps(
+            {
+                "tool_name": "Write",
+                "tool_input": {"file_path": "/tmp/test.txt", "content": "hello"},
+            }
+        )
 
         result = subprocess.run(
             [
@@ -1153,7 +1140,6 @@ class TestPreToolUseScript:
 
     def test_pre_hook_handles_empty_input(self, tmp_path):
         """Test that pre-hook handles empty stdin gracefully."""
-        import subprocess
 
         result = subprocess.run(
             [
@@ -1176,14 +1162,15 @@ class TestPostToolUseScript:
 
     def test_post_hook_logs_result(self, tmp_path):
         """Test that post-hook logs tool results and exits 0."""
-        import subprocess
 
         db_path = str(tmp_path / "harness.db")
-        hook_data = json.dumps({
-            "tool_name": "Bash",
-            "tool_input": {"command": "git status"},
-            "tool_output": "On branch main\nnothing to commit",
-        })
+        hook_data = json.dumps(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "git status"},
+                "tool_output": "On branch main\nnothing to commit",
+            }
+        )
 
         result = subprocess.run(
             [
@@ -1203,14 +1190,15 @@ class TestPostToolUseScript:
     def test_post_hook_tracks_file_write(self, tmp_path):
         """Test that post-hook tracks Write tool file changes."""
         import sqlite3
-        import subprocess
 
         db_path = str(tmp_path / "harness.db")
-        hook_data = json.dumps({
-            "tool_name": "Write",
-            "tool_input": {"file_path": "/tmp/new_file.py", "content": "print('hello')"},
-            "tool_output": "File written",
-        })
+        hook_data = json.dumps(
+            {
+                "tool_name": "Write",
+                "tool_input": {"file_path": "/tmp/new_file.py", "content": "print('hello')"},
+                "tool_output": "File written",
+            }
+        )
 
         result = subprocess.run(
             [
@@ -1242,18 +1230,19 @@ class TestPostToolUseScript:
     def test_post_hook_tracks_edit_tool(self, tmp_path):
         """Test that post-hook tracks Edit tool file changes."""
         import sqlite3
-        import subprocess
 
         db_path = str(tmp_path / "harness.db")
-        hook_data = json.dumps({
-            "tool_name": "Edit",
-            "tool_input": {
-                "file_path": "/tmp/existing.py",
-                "old_string": "foo",
-                "new_string": "bar",
-            },
-            "tool_output": "Edit applied",
-        })
+        hook_data = json.dumps(
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": "/tmp/existing.py",
+                    "old_string": "foo",
+                    "new_string": "bar",
+                },
+                "tool_output": "Edit applied",
+            }
+        )
 
         result = subprocess.run(
             [
@@ -1280,7 +1269,6 @@ class TestPostToolUseScript:
 
     def test_post_hook_handles_empty_input(self, tmp_path):
         """Test that post-hook handles empty stdin gracefully."""
-        import subprocess
 
         result = subprocess.run(
             [

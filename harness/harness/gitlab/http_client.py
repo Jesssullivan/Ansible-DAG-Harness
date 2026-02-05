@@ -71,9 +71,7 @@ class GitLabAPIConfig:
             token=token,
             timeout=gitlab_config.get("timeout", 30.0),
             default_assignee=gitlab_config.get("default_assignee", ""),
-            default_labels=gitlab_config.get(
-                "default_labels", ["role", "ansible", "molecule"]
-            ),
+            default_labels=gitlab_config.get("default_labels", ["role", "ansible", "molecule"]),
         )
 
 
@@ -109,7 +107,9 @@ class GitLabAPI:
     async def __aenter__(self) -> "GitLabAPI":
         """Enter async context, creating the HTTP client."""
         if not self.config.token:
-            raise GitLabAPIError("No GitLab token configured. Set GITLAB_TOKEN environment variable.")
+            raise GitLabAPIError(
+                "No GitLab token configured. Set GITLAB_TOKEN environment variable."
+            )
 
         self._client = httpx.AsyncClient(
             base_url=self.config.base_url,
@@ -130,7 +130,9 @@ class GitLabAPI:
             raise GitLabAPIError("GitLabAPI must be used as async context manager")
         return self._client
 
-    async def _get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any] | list[Any]:
+    async def _get(
+        self, endpoint: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any] | list[Any]:
         """Make authenticated GET request."""
         client = self._check_client()
         resp = await client.get(endpoint, params=params)
@@ -651,10 +653,9 @@ class GitLabAPI:
         """Get a label by name."""
         try:
             import urllib.parse
+
             encoded_name = urllib.parse.quote(name, safe="")
-            return await self._get(
-                f"/projects/{self.config.project_encoded}/labels/{encoded_name}"
-            )
+            return await self._get(f"/projects/{self.config.project_encoded}/labels/{encoded_name}")
         except GitLabAPIError as e:
             if e.status_code == 404:
                 return None
@@ -690,9 +691,7 @@ class GitLabAPI:
     # Iteration Operations
     # =========================================================================
 
-    async def list_iterations(
-        self, group_path: str, state: str = "opened"
-    ) -> list[dict[str, Any]]:
+    async def list_iterations(self, group_path: str, state: str = "opened") -> list[dict[str, Any]]:
         """
         List group iterations.
 
@@ -734,4 +733,3 @@ class GitLabAPI:
 
         # Fallback to first opened iteration
         return iterations[0] if iterations else None
-

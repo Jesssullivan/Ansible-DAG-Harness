@@ -48,20 +48,33 @@ The implementation is split across multiple modules for maintainability:
 from langgraph.types import Command, Send, interrupt  # noqa: F401
 
 # =============================================================================
-# STATE MODULE EXPORTS
+# BUILDER MODULE EXPORTS
 # =============================================================================
-from harness.dag.langgraph_state import (
-    BREAKPOINTS_ENV_VAR,
-    DEFAULT_BREAKPOINTS,
-    BoxUpRoleState,
-    _record_test_result,
-    create_initial_state,
-    get_breakpoints_enabled,
-    get_module_config,
-    get_module_db,
-    keep_last_n,
-    set_module_config,
-    set_module_db,
+from harness.dag.langgraph_builder import (
+    create_box_up_role_graph,
+    create_compiled_graph,
+)
+
+# =============================================================================
+# NODES MODULE EXPORTS
+# =============================================================================
+from harness.dag.langgraph_nodes import (
+    add_to_merge_train_node,
+    analyze_deps_node,
+    check_reverse_deps_node,
+    create_commit_node,
+    create_issue_node,
+    create_mr_node,
+    create_worktree_node,
+    human_approval_node,
+    merge_test_results_node,
+    notify_failure_node,
+    push_branch_node,
+    report_summary_node,
+    run_molecule_node,
+    run_pytest_node,
+    validate_deploy_node,
+    validate_role_node,
 )
 
 # =============================================================================
@@ -94,48 +107,30 @@ from harness.dag.langgraph_routing import (
 )
 
 # =============================================================================
-# NODES MODULE EXPORTS
-# =============================================================================
-from harness.dag.langgraph_nodes import (
-    add_to_merge_train_node,
-    analyze_deps_node,
-    check_reverse_deps_node,
-    create_commit_node,
-    create_issue_node,
-    create_mr_node,
-    create_worktree_node,
-    human_approval_node,
-    merge_test_results_node,
-    notify_failure_node,
-    push_branch_node,
-    report_summary_node,
-    run_molecule_node,
-    run_pytest_node,
-    validate_deploy_node,
-    validate_role_node,
-)
-
-# =============================================================================
-# BUILDER MODULE EXPORTS
-# =============================================================================
-from harness.dag.langgraph_builder import (
-    create_box_up_role_graph,
-    create_compiled_graph,
-)
-
-# =============================================================================
 # RUNNER MODULE EXPORTS
 # =============================================================================
 from harness.dag.langgraph_runner import LangGraphWorkflowRunner
 
 # =============================================================================
+# STATE MODULE EXPORTS
+# =============================================================================
+from harness.dag.langgraph_state import (
+    BREAKPOINTS_ENV_VAR,
+    DEFAULT_BREAKPOINTS,
+    BoxUpRoleState,
+    _record_test_result,
+    create_initial_state,
+    get_breakpoints_enabled,
+    get_module_config,
+    get_module_db,
+    keep_last_n,
+    set_module_config,
+    set_module_db,
+)
+
+# =============================================================================
 # NOTIFICATION EXPORTS (for test mocking compatibility)
 # =============================================================================
-from harness.notifications import (
-    notify_workflow_completed,
-    notify_workflow_failed,
-    notify_workflow_started,
-)
 
 # =============================================================================
 # PUBLIC API

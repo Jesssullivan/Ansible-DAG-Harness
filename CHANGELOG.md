@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-02-05
+
+### Added
+
+- SSH tunnel preflight checks for Windows VM connectivity
+- Root-level justfile for monorepo orchestration
+- Nix flake for reproducible development environment
+- Pre-commit configuration with ruff, mypy, shellcheck, yamllint
+- GitHub Pages documentation deployment workflow
+- Claude Code project configuration (CLAUDE.md, .claudeignore)
+- Git hooks for AI artifact blocking and commit message validation
+- Direnv support (.envrc) for shell environment setup
+
+### Changed
+
+- Enhanced GitHub Actions CI with caching, coverage, security scanning
+- Enhanced GitLab CI with Python 3.11 matrix and lint stage separation
+- Expanded MkDocs navigation with vignettes and API reference
+- Added mypy type checking configuration to pyproject.toml
+- Improved harness/justfile with molecule, MCP, and docs recipes
+
+### Fixed
+
+- Linting issues: unused imports, type annotations with TYPE_CHECKING
+- Test alignment: PBT router test updated for sequential mode
+- Timestamp precision in store tests
+
 ## [0.3.0] - 2026-02-03
 
 ### Added

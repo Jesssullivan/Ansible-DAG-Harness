@@ -24,25 +24,19 @@ TOOL_LIMITS = {
     "Task": {"per_minute": 5, "per_hour": 50},
     "WebFetch": {"per_minute": 10, "per_hour": 100},
     "WebSearch": {"per_minute": 5, "per_hour": 50},
-
     # File operations - moderate limits
     "Edit": {"per_minute": 30, "per_hour": 500},
     "Write": {"per_minute": 20, "per_hour": 200},
     "Read": {"per_minute": 60, "per_hour": 1000},
-
     # Shell operations
     "Bash": {"per_minute": 40, "per_hour": 600},
-
     # Default for unspecified tools
     "default": {"per_minute": 60, "per_hour": 1000},
 }
 
 # Database path - use configured path or fallback to claude directory
 DB_PATH = Path(
-    os.environ.get(
-        "HARNESS_RATE_LIMIT_DB",
-        os.path.expanduser("~/.claude/rate_limits.db")
-    )
+    os.environ.get("HARNESS_RATE_LIMIT_DB", os.path.expanduser("~/.claude/rate_limits.db"))
 )
 
 
@@ -75,7 +69,7 @@ def count_recent(conn: sqlite3.Connection, tool_name: str, seconds: int) -> int:
     result = conn.execute(
         """SELECT COUNT(*) as c FROM tool_invocations
            WHERE tool_name = ? AND timestamp > ? AND allowed = TRUE""",
-        (tool_name, cutoff)
+        (tool_name, cutoff),
     ).fetchone()
     return result["c"] if result else 0
 
@@ -109,13 +103,15 @@ def check_rate_limit(tool_name: str) -> tuple[bool, str]:
             reason = f"Rate limit exceeded: {tool_name} ({minute_count}/{limits['per_minute']} per minute). Wait ~{60 - (time.time() % 60):.0f}s."
         elif hour_count >= limits["per_hour"]:
             allowed = False
-            reason = f"Rate limit exceeded: {tool_name} ({hour_count}/{limits['per_hour']} per hour)."
+            reason = (
+                f"Rate limit exceeded: {tool_name} ({hour_count}/{limits['per_hour']} per hour)."
+            )
 
         session_id = os.environ.get("CLAUDE_SESSION_ID", "unknown")
         conn.execute(
             """INSERT INTO tool_invocations (tool_name, session_id, timestamp, allowed)
                VALUES (?, ?, ?, ?)""",
-            (tool_name, session_id, time.time(), allowed)
+            (tool_name, session_id, time.time(), allowed),
         )
         conn.commit()
 
@@ -130,10 +126,7 @@ def cleanup_old_records(days: int = 7) -> int:
     conn = get_db()
     try:
         cutoff = time.time() - (days * 24 * 3600)
-        cursor = conn.execute(
-            "DELETE FROM tool_invocations WHERE timestamp < ?",
-            (cutoff,)
-        )
+        cursor = conn.execute("DELETE FROM tool_invocations WHERE timestamp < ?", (cutoff,))
         conn.commit()
         return cursor.rowcount
     finally:
@@ -147,20 +140,23 @@ def get_usage_stats() -> dict:
         stats = {}
         now = time.time()
 
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT tool_name, COUNT(*) as count
             FROM tool_invocations
             WHERE timestamp > ? AND allowed = TRUE
             GROUP BY tool_name
             ORDER BY count DESC
-        """, (now - 3600,)).fetchall()
+        """,
+            (now - 3600,),
+        ).fetchall()
 
         for row in rows:
             limits = get_limits(row["tool_name"])
             stats[row["tool_name"]] = {
                 "count_last_hour": row["count"],
                 "limit_per_hour": limits["per_hour"],
-                "usage_pct": (row["count"] / limits["per_hour"]) * 100
+                "usage_pct": (row["count"] / limits["per_hour"]) * 100,
             }
 
         return stats
@@ -184,11 +180,16 @@ def main():
     allowed, reason = check_rate_limit(tool_name)
 
     if not allowed:
-        print(json.dumps({
-            "error": reason,
-            "tool": tool_name,
-            "suggestion": "Wait before retrying or use a different approach."
-        }), file=sys.stderr)
+        print(
+            json.dumps(
+                {
+                    "error": reason,
+                    "tool": tool_name,
+                    "suggestion": "Wait before retrying or use a different approach.",
+                }
+            ),
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     sys.exit(0)

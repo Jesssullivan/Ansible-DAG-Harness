@@ -63,6 +63,10 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-xdist>=3.0.0",
     "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "types-PyYAML>=6.0.0",
+    "bandit[toml]>=1.7.0",
+    "pre-commit>=3.7.0",
 ]
 proxy = [
     "fastapi>=0.109.0",
@@ -138,6 +142,14 @@ filterwarnings = [
     "ignore::DeprecationWarning:pydantic",
     "ignore::DeprecationWarning:langchain_core",
 ]
+markers = [
+    "unit: mark test as unit test",
+    "pbt: mark test as property-based test (hypothesis)",
+    "integration: mark test as integration test (requires external services)",
+    "e2e: mark test as end-to-end test (requires GitLab credentials)",
+    "slow: mark test as slow-running",
+    "langsmith: mark test to be tracked in LangSmith",
+]
 
 [tool.ruff]
 target-version = "py311"
@@ -181,3 +193,31 @@ type = "github"
 [tool.coverage.run]
 source = ["harness"]
 omit = ["harness/__pycache__/*", "tests/*"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Gradual typing
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "langchain_core.*",
+    "langgraph.*",
+    "langgraph_checkpoint_sqlite.*",
+    "fastmcp.*",
+    "hypothesis.*",
+    "aiosqlite.*",
+]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true

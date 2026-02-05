@@ -14,7 +14,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # =============================================================================
 # PREDEFINED API RESPONSES
 # =============================================================================
@@ -111,7 +110,11 @@ def mock_glab_api_responses() -> dict[str, Any]:
             {
                 "id": 1,
                 "merge_request": {"iid": 456, "title": "Box up common role"},
-                "pipeline": {"id": 999, "status": "running", "web_url": "https://gitlab.example.com/pipelines/999"},
+                "pipeline": {
+                    "id": 999,
+                    "status": "running",
+                    "web_url": "https://gitlab.example.com/pipelines/999",
+                },
                 "status": "merging",
                 "created_at": "2026-02-03T10:10:00Z",
             }
@@ -301,10 +304,12 @@ def mock_glab_rate_limit():
             # Rate limited
             result.returncode = 1
             result.stdout = ""
-            result.stderr = json.dumps({
-                "message": "429 Too Many Requests",
-                "error": "Rate limit exceeded. Retry after 60 seconds.",
-            })
+            result.stderr = json.dumps(
+                {
+                    "message": "429 Too Many Requests",
+                    "error": "Rate limit exceeded. Retry after 60 seconds.",
+                }
+            )
         else:
             # Success after retries
             result.returncode = 0
@@ -370,9 +375,9 @@ def mock_glab_graphql():
                         "iteration": {
                             "id": "gid://gitlab/Iteration/12345",
                             "title": "Sprint 42 - Week 5",
-                        }
+                        },
                     },
-                    "errors": []
+                    "errors": [],
                 }
             }
         },

@@ -138,6 +138,48 @@ def classify_error(error_msg: str, node_name: str, state: dict) -> ClassifiedErr
                 context={"errors": error_msg[-2000:]},
             )
 
+    # SSH tunnel connectivity errors are recoverable (v0.6.1)
+    # NOTE: Check BEFORE "test failures" since tunnel errors contain "failed"
+    if "tunnel" in error_lower and (
+        "not available" in error_lower
+        or "not running" in error_lower
+        or "pre-flight failed" in error_lower
+    ):
+        deploy_target = state.get("deploy_target", "vmnode852")
+        return ClassifiedError(
+            error_type=ErrorType.RECOVERABLE,
+            message=error_msg,
+            resolution_hint="start_tunnel",
+            context={
+                "deploy_target": deploy_target,
+                "recovery_context": state.get("recovery_context", {}),
+            },
+        )
+
+    # WinRM connection refused - tunnel may not be running
+    if "winrm" in error_lower and (
+        "connection refused" in error_lower or "connection reset" in error_lower
+    ):
+        deploy_target = state.get("deploy_target", "vmnode852")
+        return ClassifiedError(
+            error_type=ErrorType.RECOVERABLE,
+            message=error_msg,
+            resolution_hint="start_tunnel",
+            context={"deploy_target": deploy_target},
+        )
+
+    # Localhost port connection issues for tunnel ports
+    if "localhost" in error_lower and ("timed out" in error_lower or "refused" in error_lower):
+        # Check if it's a tunnel port (15851, 15852, 15876)
+        if any(port in error_lower for port in ["15851", "15852", "15876"]):
+            deploy_target = state.get("deploy_target", "vmnode852")
+            return ClassifiedError(
+                error_type=ErrorType.RECOVERABLE,
+                message=error_msg,
+                resolution_hint="start_tunnel",
+                context={"deploy_target": deploy_target},
+            )
+
     # Test failures are user-fixable
     if node_name in ("run_molecule", "run_pytest") and "failed" in error_lower:
         return ClassifiedError(
@@ -222,6 +264,35 @@ def attempt_resolution(hint: str, context: dict | None, state: dict) -> dict | N
     if hint == "delete_existing_branch":
         # Signal that branch should be force-recreated
         return {"branch_force_recreate": True}
+
+    if hint == "start_tunnel":
+        # Attempt to start SSH tunnel for Windows VM connectivity (v0.6.1)
+        deploy_target = context.get("deploy_target") or state.get("deploy_target", "vmnode852")
+
+        from harness.tunnel_preflight import is_tunneled_host, start_tunnel
+
+        if not is_tunneled_host(deploy_target):
+            # Not a tunneled host, resolution not applicable
+            return None
+
+        # Get repo_root from config or state
+        from harness.dag.langgraph_state import get_module_config
+
+        harness_config = get_module_config()
+        if harness_config:
+            repo_root = Path(harness_config.repo_root)
+        else:
+            repo_root = Path(state.get("worktree_path", ".")).parent
+
+        success, message = start_tunnel(deploy_target, repo_root)
+        if success:
+            logger.info(f"Tunnel started successfully: {message}")
+            # Return empty dict to signal resolution succeeded
+            # (no state updates needed, just retry the node)
+            return {}
+
+        logger.warning(f"Failed to start tunnel: {message}")
+        return None
 
     # No resolution available for this hint
     return None
@@ -405,9 +476,7 @@ def lookup_recovery_memory(
         if results and results[0] is not None:
             item = results[0]
             if hasattr(item, "value") and item.value.get("success"):
-                logger.info(
-                    f"Found recovery memory for {node_name}/{role_name}: {error_pattern}"
-                )
+                logger.info(f"Found recovery memory for {node_name}/{role_name}: {error_pattern}")
                 return item.value
 
         # Check cross-role patterns
@@ -416,9 +485,7 @@ def lookup_recovery_memory(
         if results and results[0] is not None:
             item = results[0]
             if hasattr(item, "value") and item.value.get("success"):
-                logger.info(
-                    f"Found cross-role recovery pattern for {node_name}: {error_pattern}"
-                )
+                logger.info(f"Found cross-role recovery pattern for {node_name}: {error_pattern}")
                 return item.value
 
     except Exception as e:
@@ -463,7 +530,7 @@ def persist_recovery_memory(
             "fix_applied": fix_applied,
             "success": success,
             "iterations": iterations,
-            "timestamp": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            "timestamp": datetime.datetime.now(tz=datetime.UTC).isoformat(),
         }
 
         ops = [

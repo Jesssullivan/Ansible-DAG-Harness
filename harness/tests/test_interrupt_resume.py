@@ -13,14 +13,12 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from harness.db.models import Role, WorkflowStatus
 from harness.db.state import StateDB
-
 
 # =============================================================================
 # FIXTURES
@@ -61,9 +59,7 @@ def state_db_with_execution(state_db: StateDB) -> tuple[StateDB, int]:
     )
 
     # Create execution
-    execution_id = state_db.create_execution(
-        workflow_name="test-workflow", role_name="test_role"
-    )
+    execution_id = state_db.create_execution(workflow_name="test-workflow", role_name="test_role")
 
     return state_db, execution_id
 
@@ -280,25 +276,11 @@ class TestInterruptFunctionality:
     @pytest.mark.unit
     def test_interrupt_at_human_approval(self):
         """Interrupt at human_approval node with proper context."""
-        from harness.dag.langgraph_engine import BoxUpRoleState, human_approval_node, interrupt
-
         # Create a test state that would be passed to human_approval
-        state: BoxUpRoleState = {
-            "role_name": "test_role",
-            "mr_url": "https://gitlab.example.com/merge_requests/123",
-            "mr_iid": 123,
-            "molecule_passed": True,
-            "pytest_passed": True,
-            "branch": "sid/test_role",
-            "issue_url": "https://gitlab.example.com/issues/456",
-            "wave": 2,
-            "wave_name": "Core Services",
-            "credentials": [],
-            "explicit_deps": ["common"],
-        }
-
         # Verify the node function exists and has correct signature
         import inspect
+
+        from harness.dag.langgraph_engine import human_approval_node
 
         sig = inspect.signature(human_approval_node)
         assert "state" in sig.parameters
@@ -317,9 +299,7 @@ class TestInterruptFunctionality:
         assert "add_to_merge_train" in DEFAULT_BREAKPOINTS
 
         # Graph creation with breakpoints enabled
-        graph, breakpoints = create_box_up_role_graph(
-            db_path=":memory:", enable_breakpoints=True
-        )
+        graph, breakpoints = create_box_up_role_graph(db_path=":memory:", enable_breakpoints=True)
 
         assert breakpoints == DEFAULT_BREAKPOINTS
         assert len(breakpoints) >= 2
@@ -507,7 +487,7 @@ class TestErrorRecovery:
         # get_checkpoint should handle the error
         # The actual behavior depends on implementation - may return None or raise
         try:
-            result = db.get_checkpoint(execution_id)
+            db.get_checkpoint(execution_id)
             # If it doesn't raise, it should return None for corrupted data
             # or re-raise - either is acceptable
         except json.JSONDecodeError:
@@ -607,9 +587,7 @@ class TestUnifiedCheckpointer:
         assert unified._sync_to_statedb is True
 
     @pytest.mark.unit
-    def test_unified_checkpointer_inner_property(
-        self, state_db: StateDB, mock_inner_checkpointer
-    ):
+    def test_unified_checkpointer_inner_property(self, state_db: StateDB, mock_inner_checkpointer):
         """Access underlying checkpointer via inner property."""
         from harness.dag.checkpointer_unified import CheckpointerWithStateDB
 
@@ -645,9 +623,7 @@ class TestUnifiedCheckpointer:
         assert enriched["source"] == "test"  # Original preserved
 
     @pytest.mark.unit
-    def test_unified_checkpointer_sync_disabled(
-        self, state_db: StateDB, mock_inner_checkpointer
-    ):
+    def test_unified_checkpointer_sync_disabled(self, state_db: StateDB, mock_inner_checkpointer):
         """StateDB sync can be disabled."""
         from harness.dag.checkpointer_unified import CheckpointerWithStateDB
 
@@ -670,9 +646,7 @@ class TestAsyncCheckpointOperations:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_async_put_delegates_to_inner(
-        self, state_db: StateDB, mock_inner_checkpointer
-    ):
+    async def test_async_put_delegates_to_inner(self, state_db: StateDB, mock_inner_checkpointer):
         """aput() delegates to inner checkpointer."""
         from harness.dag.checkpointer_unified import CheckpointerWithStateDB
 
@@ -725,9 +699,7 @@ class TestStateExtraction:
         """Extract execution_id from integer thread_id."""
         from harness.dag.checkpointer_unified import CheckpointerWithStateDB
 
-        unified = CheckpointerWithStateDB(
-            db=state_db, inner_checkpointer=mock_inner_checkpointer
-        )
+        unified = CheckpointerWithStateDB(db=state_db, inner_checkpointer=mock_inner_checkpointer)
 
         config = {"configurable": {"thread_id": 123}}
         execution_id = unified._extract_execution_id(config)
@@ -735,15 +707,11 @@ class TestStateExtraction:
         assert execution_id == 123
 
     @pytest.mark.unit
-    def test_extract_execution_id_from_string(
-        self, state_db: StateDB, mock_inner_checkpointer
-    ):
+    def test_extract_execution_id_from_string(self, state_db: StateDB, mock_inner_checkpointer):
         """Extract execution_id from string thread_id."""
         from harness.dag.checkpointer_unified import CheckpointerWithStateDB
 
-        unified = CheckpointerWithStateDB(
-            db=state_db, inner_checkpointer=mock_inner_checkpointer
-        )
+        unified = CheckpointerWithStateDB(db=state_db, inner_checkpointer=mock_inner_checkpointer)
 
         config = {"configurable": {"thread_id": "456"}}
         execution_id = unified._extract_execution_id(config)
@@ -757,9 +725,7 @@ class TestStateExtraction:
         """Extract execution_id from 'execution-123' format."""
         from harness.dag.checkpointer_unified import CheckpointerWithStateDB
 
-        unified = CheckpointerWithStateDB(
-            db=state_db, inner_checkpointer=mock_inner_checkpointer
-        )
+        unified = CheckpointerWithStateDB(db=state_db, inner_checkpointer=mock_inner_checkpointer)
 
         config = {"configurable": {"thread_id": "execution-789"}}
         execution_id = unified._extract_execution_id(config)
@@ -771,9 +737,7 @@ class TestStateExtraction:
         """Handle missing thread_id gracefully."""
         from harness.dag.checkpointer_unified import CheckpointerWithStateDB
 
-        unified = CheckpointerWithStateDB(
-            db=state_db, inner_checkpointer=mock_inner_checkpointer
-        )
+        unified = CheckpointerWithStateDB(db=state_db, inner_checkpointer=mock_inner_checkpointer)
 
         config = {"configurable": {}}
         execution_id = unified._extract_execution_id(config)
@@ -841,9 +805,7 @@ class TestGraphCompilationWithBreakpoints:
         """Graph compiles with interrupt_before parameter."""
         from harness.dag.langgraph_engine import create_box_up_role_graph
 
-        graph, breakpoints = create_box_up_role_graph(
-            db_path=":memory:", enable_breakpoints=True
-        )
+        graph, breakpoints = create_box_up_role_graph(db_path=":memory:", enable_breakpoints=True)
 
         # Should compile without checkpointer for basic verification
         compiled = graph.compile()
@@ -854,9 +816,7 @@ class TestGraphCompilationWithBreakpoints:
         """Graph compiles without breakpoints."""
         from harness.dag.langgraph_engine import create_box_up_role_graph
 
-        graph, breakpoints = create_box_up_role_graph(
-            db_path=":memory:", enable_breakpoints=False
-        )
+        graph, breakpoints = create_box_up_role_graph(db_path=":memory:", enable_breakpoints=False)
 
         assert breakpoints == []
         compiled = graph.compile()

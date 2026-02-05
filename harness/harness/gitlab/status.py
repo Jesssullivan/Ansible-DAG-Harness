@@ -11,14 +11,12 @@ The status reporter aggregates data from the local StateDB and GitLab API
 to provide a unified view of the workflow progress.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 from harness.db.state import StateDB
-from harness.gitlab.labels import WAVE_LABEL_DESCRIPTIONS, WAVE_LABELS
+from harness.gitlab.labels import WAVE_LABEL_DESCRIPTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -125,11 +123,7 @@ class WaveStatus:
         if self.total_roles == 0:
             return 0.0
         # Weight: issue=25%, MR=50%, merged=100%
-        score = (
-            self.roles_with_issues * 0.25
-            + self.roles_with_mrs * 0.50
-            + self.mrs_merged * 1.0
-        )
+        score = self.roles_with_issues * 0.25 + self.roles_with_mrs * 0.50 + self.mrs_merged * 1.0
         max_score = self.total_roles * 1.0
         return (score / max_score) * 100
 
@@ -467,12 +461,8 @@ class GitLabStatusReporter:
                 if created_at:
                     try:
                         # Parse ISO format datetime
-                        created = datetime.fromisoformat(
-                            created_at.replace("Z", "+00:00")
-                        )
-                        age_hours = (
-                            now - created.replace(tzinfo=None)
-                        ).total_seconds() / 3600
+                        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        age_hours = (now - created.replace(tzinfo=None)).total_seconds() / 3600
                         if oldest_age is None or age_hours > oldest_age:
                             oldest_age = age_hours
                     except Exception:
@@ -568,9 +558,7 @@ class GitLabStatusReporter:
         lines.append(f"  Issues Created:  {status.total_issues}")
         lines.append(f"  MRs Created:     {status.total_mrs}")
         lines.append(f"  MRs Merged:      {status.total_merged}")
-        lines.append(
-            f"  Completion:      {status.overall_completion_percentage:.1f}%"
-        )
+        lines.append(f"  Completion:      {status.overall_completion_percentage:.1f}%")
         lines.append(f"  Remaining:       {status.roles_remaining}")
         lines.append("")
 
@@ -583,13 +571,9 @@ class GitLabStatusReporter:
         if train.oldest_mr_age_hours:
             lines.append(f"  Oldest MR:       {train.oldest_mr_age_hours:.1f} hours")
         if train.estimated_completion_hours:
-            lines.append(
-                f"  Est. Completion: {train.estimated_completion_hours:.1f} hours"
-            )
+            lines.append(f"  Est. Completion: {train.estimated_completion_hours:.1f} hours")
         if train.avg_pipeline_duration_minutes:
-            lines.append(
-                f"  Avg Pipeline:    {train.avg_pipeline_duration_minutes:.1f} min"
-            )
+            lines.append(f"  Avg Pipeline:    {train.avg_pipeline_duration_minutes:.1f} min")
         if train.blocked_mrs:
             lines.append(f"  Blocked MRs:     {', '.join(f'!{iid}' for iid in train.blocked_mrs)}")
         lines.append("")
@@ -623,9 +607,7 @@ class GitLabStatusReporter:
 
             lines.append(f"WAVE {wave.wave}: {wave.wave_name}")
             lines.append("-" * 60)
-            lines.append(
-                f"  {'Role':<25} {'Issue':<10} {'MR':<10} {'Pipeline':<12} {'Stage':<12}"
-            )
+            lines.append(f"  {'Role':<25} {'Issue':<10} {'MR':<10} {'Pipeline':<12} {'Stage':<12}")
             lines.append("  " + "-" * 58)
 
             for role in sorted(wave.roles, key=lambda r: r.role_name):
