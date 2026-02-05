@@ -269,8 +269,7 @@ class HOTLOrchestrator:
             item: QueueItem that was paused.
         """
         logger.info(
-            f"Role '{item.role_name}' paused for human approval "
-            f"(execution_id={item.execution_id})"
+            f"Role '{item.role_name}' paused for human approval (execution_id={item.execution_id})"
         )
         self._queue.update_status(
             item.role_name,

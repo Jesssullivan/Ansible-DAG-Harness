@@ -288,9 +288,9 @@ def assert_gitlab_resource_exists(
         timeout=30,
     )
 
-    assert (
-        result.returncode == 0
-    ), f"glab api call failed for {resource_type}/{iid}: {result.stderr}"
+    assert result.returncode == 0, (
+        f"glab api call failed for {resource_type}/{iid}: {result.stderr}"
+    )
 
     data = json.loads(result.stdout)
     assert "id" in data, f"Resource {resource_type}/{iid} not found in {project_path}"

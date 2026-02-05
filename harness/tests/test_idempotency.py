@@ -569,10 +569,7 @@ class TestWorktreeIdempotency:
 
         # The filesystem path doesn't exist, but git worktree list shows it
         porcelain_output = (
-            "worktree /other/path/sid-common\n"
-            "HEAD abc123\n"
-            "branch refs/heads/sid/common\n"
-            "\n"
+            "worktree /other/path/sid-common\nHEAD abc123\nbranch refs/heads/sid/common\n\n"
         )
 
         mock_result = MagicMock()

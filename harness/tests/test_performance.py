@@ -122,7 +122,7 @@ class TestPerformanceBenchmarks:
             db_with_roles.get_role("common")
         elapsed = (time.perf_counter() - start) / iterations
 
-        assert elapsed < 0.010, f"Average query time {elapsed*1000:.2f}ms exceeds 10ms"
+        assert elapsed < 0.010, f"Average query time {elapsed * 1000:.2f}ms exceeds 10ms"
 
     def test_checkpoint_restore_under_100ms(self, db_with_roles):
         """Checkpoint save and restore should complete under 100ms."""
@@ -162,9 +162,9 @@ class TestPerformanceBenchmarks:
 
         assert restored is not None
         assert restored["role_name"] == "common"
-        assert (
-            total_elapsed < 0.100
-        ), f"Checkpoint save+restore {total_elapsed*1000:.2f}ms exceeds 100ms"
+        assert total_elapsed < 0.100, (
+            f"Checkpoint save+restore {total_elapsed * 1000:.2f}ms exceeds 100ms"
+        )
 
     def test_store_put_get_under_5ms(self, store):
         """HarnessStore put/get should complete under 5ms."""
@@ -181,7 +181,7 @@ class TestPerformanceBenchmarks:
             store.get(("roles", "common"), f"run_{i}")
         elapsed = (time.perf_counter() - start) / iterations
 
-        assert elapsed < 0.005, f"Average put+get time {elapsed*1000:.2f}ms exceeds 5ms"
+        assert elapsed < 0.005, f"Average put+get time {elapsed * 1000:.2f}ms exceeds 5ms"
 
     def test_state_serialization_under_1ms(self):
         """BoxUpRoleState serialization should complete under 1ms."""
@@ -201,7 +201,7 @@ class TestPerformanceBenchmarks:
             json.loads(serialized)
         elapsed = (time.perf_counter() - start) / iterations
 
-        assert elapsed < 0.001, f"Average serialization time {elapsed*1000:.3f}ms exceeds 1ms"
+        assert elapsed < 0.001, f"Average serialization time {elapsed * 1000:.3f}ms exceeds 1ms"
 
     def test_namespace_search_under_50ms(self, store):
         """Store namespace search should complete under 50ms even with 1000 entries."""
@@ -221,7 +221,7 @@ class TestPerformanceBenchmarks:
         elapsed = time.perf_counter() - start
 
         assert len(results) > 0
-        assert elapsed < 0.050, f"Search time {elapsed*1000:.2f}ms exceeds 50ms for 1000 entries"
+        assert elapsed < 0.050, f"Search time {elapsed * 1000:.2f}ms exceeds 50ms for 1000 entries"
 
     def test_batch_operations_faster_than_individual(self, store):
         """Batch operations should be faster than individual calls."""
@@ -246,8 +246,8 @@ class TestPerformanceBenchmarks:
         # Batch should be faster (or at least not significantly slower)
         # Use a generous margin: batch should be at most 2x slower (accounting for overhead)
         assert batch_elapsed < individual_elapsed * 2.0, (
-            f"Batch ({batch_elapsed*1000:.2f}ms) should not be much slower than "
-            f"individual ({individual_elapsed*1000:.2f}ms)"
+            f"Batch ({batch_elapsed * 1000:.2f}ms) should not be much slower than "
+            f"individual ({individual_elapsed * 1000:.2f}ms)"
         )
 
     def test_graph_compilation_under_500ms(self):
@@ -270,7 +270,7 @@ class TestPerformanceBenchmarks:
         elapsed = (time.perf_counter() - start) / iterations
 
         assert graph is not None
-        assert elapsed < 0.500, f"Graph compilation {elapsed*1000:.2f}ms exceeds 500ms"
+        assert elapsed < 0.500, f"Graph compilation {elapsed * 1000:.2f}ms exceeds 500ms"
 
     def test_dependency_resolution_under_100ms(self, db_with_roles):
         """Full dependency resolution for all roles under 100ms."""
@@ -288,7 +288,7 @@ class TestPerformanceBenchmarks:
         elapsed = time.perf_counter() - start
 
         assert elapsed < 0.100, (
-            f"Full dependency resolution {elapsed*1000:.2f}ms exceeds 100ms "
+            f"Full dependency resolution {elapsed * 1000:.2f}ms exceeds 100ms "
             f"for {len(roles)} roles"
         )
 
@@ -318,8 +318,8 @@ class TestPerformanceBenchmarks:
 
         # Filtered should be faster or comparable
         assert elapsed_filtered <= elapsed_all * 1.5, (
-            f"Filtered listing ({elapsed_filtered*1000:.2f}ms) should not be "
-            f"much slower than full listing ({elapsed_all*1000:.2f}ms)"
+            f"Filtered listing ({elapsed_filtered * 1000:.2f}ms) should not be "
+            f"much slower than full listing ({elapsed_all * 1000:.2f}ms)"
         )
 
     def test_store_namespace_listing_under_20ms(self, store_with_data):
@@ -334,7 +334,7 @@ class TestPerformanceBenchmarks:
         elapsed = time.perf_counter() - start
 
         assert len(namespaces) > 0
-        assert elapsed < 0.020, f"Namespace listing {elapsed*1000:.2f}ms exceeds 20ms"
+        assert elapsed < 0.020, f"Namespace listing {elapsed * 1000:.2f}ms exceeds 20ms"
 
     def test_initial_state_creation_under_1ms(self):
         """create_initial_state should complete under 1ms."""
@@ -348,4 +348,4 @@ class TestPerformanceBenchmarks:
         elapsed = (time.perf_counter() - start) / iterations
 
         assert state["role_name"] == "common"
-        assert elapsed < 0.001, f"Initial state creation {elapsed*1000:.3f}ms exceeds 1ms"
+        assert elapsed < 0.001, f"Initial state creation {elapsed * 1000:.3f}ms exceeds 1ms"

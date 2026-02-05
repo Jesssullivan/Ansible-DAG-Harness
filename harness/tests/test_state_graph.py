@@ -489,9 +489,9 @@ class TestTopologicalSort:
         # Edge (a, b) means a depends on b, so b must come before a
         for from_node, to_node in edges:
             if from_node in order_idx and to_node in order_idx:
-                assert (
-                    order_idx[to_node] < order_idx[from_node]
-                ), f"{to_node} should come before {from_node}"
+                assert order_idx[to_node] < order_idx[from_node], (
+                    f"{to_node} should come before {from_node}"
+                )
 
 
 class TestValidateDependencies:

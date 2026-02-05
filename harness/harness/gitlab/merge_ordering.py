@@ -456,8 +456,7 @@ class MergeOrderingService:
         """
         try:
             return self._api_get(
-                f"projects/{self._project_path_encoded}/merge_trains"
-                f"?target_branch={target_branch}"
+                f"projects/{self._project_path_encoded}/merge_trains?target_branch={target_branch}"
             )
         except RuntimeError as e:
             logger.warning(f"Failed to get merge train: {e}")

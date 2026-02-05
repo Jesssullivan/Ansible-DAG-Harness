@@ -42,9 +42,9 @@ class TestGetNpmScripts:
 
         scripts = get_npm_scripts()
         for key, cmd in scripts.items():
-            assert cmd.startswith(
-                "cd harness && "
-            ), f"Script '{key}' does not cd to harness dir: {cmd}"
+            assert cmd.startswith("cd harness && "), (
+                f"Script '{key}' does not cd to harness dir: {cmd}"
+            )
 
     def test_scripts_contain_expected_entries(self) -> None:
         """Essential harness commands are present."""

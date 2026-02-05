@@ -294,9 +294,9 @@ class TestWaveExecution:
         assert role is not None
         deps = e2e_db.get_dependencies("ems_platform_services", transitive=False)
         dep_names = [d[0] for d in deps]
-        assert (
-            "common" in dep_names
-        ), f"ems_platform_services should depend on common; got {dep_names}"
+        assert "common" in dep_names, (
+            f"ems_platform_services should depend on common; got {dep_names}"
+        )
 
         # Run the wave-2 role
         wave2_dir = tmp_path / "wave2"
@@ -344,19 +344,19 @@ class TestWaveExecution:
 
         # Passing role completed successfully -- failure state did not leak
         pass_completed = pass_result.get("completed_nodes", [])
-        assert (
-            "report_summary" in pass_completed
-        ), f"Passing role should complete; got {pass_completed}"
+        assert "report_summary" in pass_completed, (
+            f"Passing role should complete; got {pass_completed}"
+        )
         pass_errors = pass_result.get("errors", [])
         # Passing role may have non-fatal errors but should not have molecule failures
-        assert not any(
-            "molecule" in e.lower() and "failed" in e.lower() for e in pass_errors
-        ), f"Passing role should not have molecule failures; got {pass_errors}"
+        assert not any("molecule" in e.lower() and "failed" in e.lower() for e in pass_errors), (
+            f"Passing role should not have molecule failures; got {pass_errors}"
+        )
 
         # Failing role should have hit notify_failure
         fail_completed = fail_result.get("completed_nodes", [])
-        assert (
-            "notify_failure" in fail_completed
-        ), f"Failing role should route to notify_failure; got {fail_completed}"
+        assert "notify_failure" in fail_completed, (
+            f"Failing role should route to notify_failure; got {fail_completed}"
+        )
         fail_errors = fail_result.get("errors", [])
         assert len(fail_errors) > 0, "Failing role should have errors"

@@ -286,9 +286,9 @@ class TestStateInvariants:
         # The strategy generates unique completed_nodes.
         # Verify operator.add reducer + set dedup in real usage preserves this.
         completed = state["completed_nodes"]
-        assert len(completed) == len(
-            set(completed)
-        ), f"Duplicate completed_nodes found: {completed}"
+        assert len(completed) == len(set(completed)), (
+            f"Duplicate completed_nodes found: {completed}"
+        )
 
     @pytest.mark.pbt
     @given(state=box_up_state_strategy())
@@ -705,7 +705,7 @@ class TestGraphTraversal:
             source, target = path[i], path[i + 1]
             neighbors = edges.get(source, [])
             assert target in neighbors, (
-                f"Invalid edge {source} -> {target}. " f"Valid targets from {source}: {neighbors}"
+                f"Invalid edge {source} -> {target}. Valid targets from {source}: {neighbors}"
             )
 
     @pytest.mark.pbt
@@ -755,9 +755,9 @@ class TestGraphTraversal:
             return any(can_reach(n, target, visited.copy()) for n in edges.get(node, []))
 
         for node in conditional_nodes:
-            assert can_reach(
-                node, "notify_failure", set()
-            ), f"Conditional node '{node}' cannot reach notify_failure"
+            assert can_reach(node, "notify_failure", set()), (
+                f"Conditional node '{node}' cannot reach notify_failure"
+            )
 
     @pytest.mark.pbt
     def test_graph_is_acyclic(self):

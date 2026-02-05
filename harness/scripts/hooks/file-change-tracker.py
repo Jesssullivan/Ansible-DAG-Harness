@@ -160,9 +160,7 @@ class FileChangeTrackerScript:
                         if agent_id and change.get("agent_id") != agent_id:
                             continue
                         if since:
-                            change_time = datetime.fromisoformat(
-                                change.get("timestamp", "")
-                            )
+                            change_time = datetime.fromisoformat(change.get("timestamp", ""))
                             if change_time < since:
                                 continue
                         changes.append(change)

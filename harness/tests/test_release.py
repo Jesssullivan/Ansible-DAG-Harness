@@ -50,9 +50,9 @@ class TestVersionConsistency:
         """Version must be valid semantic versioning."""
         version = _get_pyproject_version()
         # Match major.minor.patch with optional pre-release
-        assert re.match(
-            r"^\d+\.\d+\.\d+(-[\w.]+)?$", version
-        ), f"Version '{version}' is not valid semver"
+        assert re.match(r"^\d+\.\d+\.\d+(-[\w.]+)?$", version), (
+            f"Version '{version}' is not valid semver"
+        )
 
 
 @pytest.mark.unit
@@ -63,8 +63,7 @@ class TestChangelog:
         """CHANGELOG.md must exist at the repo root."""
         changelog = REPO_ROOT / "CHANGELOG.md"
         assert changelog.exists(), (
-            f"CHANGELOG.md not found at {changelog}. "
-            "Create one following Keep a Changelog format."
+            f"CHANGELOG.md not found at {changelog}. Create one following Keep a Changelog format."
         )
 
     def test_changelog_has_current_version(self):
@@ -88,9 +87,9 @@ class TestChangelog:
 
         content = changelog.read_text()
         # Should have at least one version header
-        assert re.search(
-            r"^## \[\d+\.\d+\.\d+\]", content, re.MULTILINE
-        ), "CHANGELOG.md should have version headers in format '## [x.y.z]'"
+        assert re.search(r"^## \[\d+\.\d+\.\d+\]", content, re.MULTILINE), (
+            "CHANGELOG.md should have version headers in format '## [x.y.z]'"
+        )
 
 
 @pytest.mark.unit
@@ -102,7 +101,7 @@ class TestCIConfig:
         github_ci = REPO_ROOT / ".github" / "workflows" / "ci.yml"
         gitlab_ci = REPO_ROOT / ".gitlab-ci.yml"
         assert github_ci.exists() or gitlab_ci.exists(), (
-            "No CI configuration found. Expected .github/workflows/ci.yml " "or .gitlab-ci.yml"
+            "No CI configuration found. Expected .github/workflows/ci.yml or .gitlab-ci.yml"
         )
 
     def test_github_ci_exists(self):
@@ -134,7 +133,7 @@ class TestCIConfig:
                     break
 
         assert found_pytest, (
-            "No CI config file references pytest. " "CI must run tests as part of the pipeline."
+            "No CI config file references pytest. CI must run tests as part of the pipeline."
         )
 
     def test_ci_runs_linter(self):

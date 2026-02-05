@@ -402,8 +402,7 @@ async def wait_for_merge_train_position(
         await asyncio.sleep(poll_interval)
 
     logger.warning(
-        f"Timeout waiting for MR !{mr_iid} to appear in merge train "
-        f"after {timeout_seconds} seconds"
+        f"Timeout waiting for MR !{mr_iid} to appear in merge train after {timeout_seconds} seconds"
     )
     return None
 

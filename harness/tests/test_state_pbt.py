@@ -97,9 +97,9 @@ class TestTransitiveDependencies:
 
         # All roles except the first should be transitive dependencies
         for role_name in roles[1:]:
-            assert (
-                role_name in trans_dep_names
-            ), f"{role_name} should be a transitive dependency of {first_role}"
+            assert role_name in trans_dep_names, (
+                f"{role_name} should be a transitive dependency of {first_role}"
+            )
 
     @pytest.mark.pbt
     @given(diamond=role_diamond_dependency_strategy())
@@ -326,9 +326,9 @@ class TestDeploymentOrder:
         order = db.get_deployment_order()
 
         # All nodes should be in the order
-        assert set(order) == set(
-            nodes
-        ), f"Deployment order {order} should contain all nodes {nodes}"
+        assert set(order) == set(nodes), (
+            f"Deployment order {order} should contain all nodes {nodes}"
+        )
 
 
 # =============================================================================
@@ -365,9 +365,9 @@ class TestWorkflowStateMachine:
         }
 
         for from_state, to_state in transitions:
-            assert (
-                to_state in valid_transitions[from_state]
-            ), f"Transition {from_state} -> {to_state} should be valid"
+            assert to_state in valid_transitions[from_state], (
+                f"Transition {from_state} -> {to_state} should be valid"
+            )
 
     @pytest.mark.pbt
     @given(transitions=state_transition_sequence_strategy(max_length=15))
@@ -427,9 +427,9 @@ class TestWorkflowStateMachine:
         }
 
         for terminal in terminal_states:
-            assert (
-                valid_transitions[terminal] == set()
-            ), f"Terminal state {terminal} should have no valid transitions"
+            assert valid_transitions[terminal] == set(), (
+                f"Terminal state {terminal} should have no valid transitions"
+            )
 
     @pytest.mark.pbt
     def test_pending_is_only_initial_state(self):
@@ -458,9 +458,9 @@ class TestWorkflowStateMachine:
                 incoming[to_state].add(from_state)
 
         # PENDING should have no incoming transitions
-        assert (
-            incoming[WorkflowStatus.PENDING] == set()
-        ), f"PENDING should have no incoming transitions, got {incoming[WorkflowStatus.PENDING]}"
+        assert incoming[WorkflowStatus.PENDING] == set(), (
+            f"PENDING should have no incoming transitions, got {incoming[WorkflowStatus.PENDING]}"
+        )
 
 
 # =============================================================================
@@ -484,9 +484,9 @@ class TestCheckpointConsistency:
         loaded = json.loads(json_str)
 
         # Check all top-level keys preserved
-        assert set(loaded.keys()) == set(
-            metadata.keys()
-        ), f"Keys mismatch: {set(loaded.keys())} != {set(metadata.keys())}"
+        assert set(loaded.keys()) == set(metadata.keys()), (
+            f"Keys mismatch: {set(loaded.keys())} != {set(metadata.keys())}"
+        )
 
         # Check specific values
         assert loaded["version"] == metadata["version"]
