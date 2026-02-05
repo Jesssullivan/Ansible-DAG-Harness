@@ -12,7 +12,6 @@ import subprocess
 import httpx
 from langgraph.types import RetryPolicy
 
-
 # Retry policy for GitLab API calls (create_issue, create_mr, add_to_merge_train)
 # Retries on network errors, timeouts, and 5xx server errors
 # Does NOT retry on 4xx client errors (bad request, auth, not found)

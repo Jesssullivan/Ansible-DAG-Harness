@@ -88,18 +88,14 @@ def main() -> None:
         result_str = str(tool_output)[:1000] if tool_output else None
 
         # Log the completion
-        log_tool_invocation(
-            tool_name, tool_input, phase="post", result=result_str, db_path=db_path
-        )
+        log_tool_invocation(tool_name, tool_input, phase="post", result=result_str, db_path=db_path)
 
         # Track file changes for file-modifying tools
         if tool_name in _FILE_CHANGE_TOOLS:
             file_path = tool_input.get("file_path", "")
             if file_path:
                 change_type = _FILE_CHANGE_TOOLS[tool_name]
-                track_file_change(
-                    file_path, change_type, tool_name=tool_name, db_path=db_path
-                )
+                track_file_change(file_path, change_type, tool_name=tool_name, db_path=db_path)
 
         # Track Bash commands that might create/delete files
         if tool_name == "Bash":
@@ -111,9 +107,7 @@ def main() -> None:
                 if len(parts) >= 2:
                     target = parts[-1].strip().split()[0] if parts[-1].strip() else ""
                     if target and not target.startswith("/dev/"):
-                        track_file_change(
-                            target, "create", tool_name="Bash", db_path=db_path
-                        )
+                        track_file_change(target, "create", tool_name="Bash", db_path=db_path)
 
     except ImportError:
         # If harness package isn't installed, silently continue

@@ -2,14 +2,92 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            harness/.venv
+          key: uv-lint-${{ runner.os }}-${{ hashFiles('harness/uv.lock') }}
+          restore-keys: |
+            uv-lint-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: harness
+        run: uv sync --extra dev
+
+      - name: Ruff lint
+        working-directory: harness
+        run: uv run ruff check harness/ tests/
+
+      - name: Ruff format check
+        working-directory: harness
+        run: uv run ruff format --check harness/ tests/
+
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './scripts'
+        continue-on-error: true
+
+  type-check:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            harness/.venv
+          key: uv-typecheck-${{ runner.os }}-${{ hashFiles('harness/uv.lock') }}
+
+      - name: Install dependencies
+        working-directory: harness
+        run: uv sync --extra dev
+
+      - name: Run mypy
+        working-directory: harness
+        run: uv run mypy harness/ --config-file pyproject.toml
+        continue-on-error: true  # Gradual strictness
+
   test:
+    name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
 
@@ -25,16 +103,86 @@ jobs:
         with:
           version: "latest"
 
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            harness/.venv
+          key: uv-test-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('harness/uv.lock') }}
+          restore-keys: |
+            uv-test-${{ runner.os }}-${{ matrix.python-version }}-
+
       - name: Install dependencies
         working-directory: harness
         run: uv sync --extra dev || (rm -rf .venv && uv sync --extra dev)
 
-      - name: Run tests
-        working-directory: harness
-        run: uv run pytest tests/ -m "unit or pbt" -v --tb=short
-
-      - name: Run linter
+      - name: Run tests with coverage
         working-directory: harness
         run: |
-          uv run ruff check harness/
-          uv run ruff format --check harness/ tests/
+          uv run pytest tests/ -m "not integration and not slow and not e2e" \
+            --cov=harness \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=50 \
+            -v --tb=short
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: harness/coverage.xml
+          flags: unittests-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  test-pbt:
+    name: Property-Based Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            harness/.venv
+          key: uv-pbt-${{ runner.os }}-${{ hashFiles('harness/uv.lock') }}
+
+      - name: Install dependencies
+        working-directory: harness
+        run: uv sync --extra dev
+
+      - name: Run Hypothesis tests
+        working-directory: harness
+        run: uv run pytest -m pbt --hypothesis-show-statistics -v
+        continue-on-error: true
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install bandit
+        run: pip install bandit[toml]
+
+      - name: Run bandit
+        run: bandit -r harness/harness -f json -o bandit-report.json || true
+
+      - name: Upload bandit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+        continue-on-error: true

@@ -12,7 +12,6 @@ All external operations (git, molecule, GitLab) are mocked.
 from __future__ import annotations
 
 import asyncio
-import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,9 +23,7 @@ from harness.dag.langgraph_engine import (
     create_initial_state,
     set_module_db,
 )
-from harness.db.models import DependencyType, Role, RoleDependency
 from harness.db.state import StateDB
-
 
 # ============================================================================
 # HELPERS
@@ -54,6 +51,7 @@ def _build_mock_stack(role_name: str, tmp_path: Path, *, fail_at_node: str | Non
         rn = state["role_name"]
         rp = tmp_path / "ansible" / "roles" / rn
         import os
+
         if not os.path.isdir(str(rp)):
             return {
                 "errors": [f"Role not found: {rn}"],
@@ -73,9 +71,7 @@ def _build_mock_stack(role_name: str, tmp_path: Path, *, fail_at_node: str | Non
     )
 
     # Test result recording (no-op for E2E)
-    stack.enter_context(
-        patch("harness.dag.langgraph_nodes._record_test_result")
-    )
+    stack.enter_context(patch("harness.dag.langgraph_nodes._record_test_result"))
 
     # Subprocess mock
     def _sub(cmd, **kw):
@@ -113,20 +109,18 @@ def _build_mock_stack(role_name: str, tmp_path: Path, *, fail_at_node: str | Non
     wt_info.commit = f"wave_{role_name}_sha"
     wt_mgr = MagicMock()
     wt_mgr.create.return_value = wt_info
-    stack.enter_context(
-        patch("harness.worktree.manager.WorktreeManager", return_value=wt_mgr)
-    )
+    stack.enter_context(patch("harness.worktree.manager.WorktreeManager", return_value=wt_mgr))
 
     # GitLabClient
     gl = MagicMock()
     mock_issue = MagicMock()
     mock_issue.iid = 1000
-    mock_issue.web_url = f"https://gitlab.example.com/-/issues/1000"
+    mock_issue.web_url = "https://gitlab.example.com/-/issues/1000"
     gl.get_or_create_issue.return_value = (mock_issue, True)
 
     mock_mr = MagicMock()
     mock_mr.iid = 2000
-    mock_mr.web_url = f"https://gitlab.example.com/-/merge_requests/2000"
+    mock_mr.web_url = "https://gitlab.example.com/-/merge_requests/2000"
     gl.get_or_create_mr.return_value = (mock_mr, True)
 
     gl.is_merge_train_available.return_value = {"available": True}
@@ -160,9 +154,7 @@ def _build_mock_stack(role_name: str, tmp_path: Path, *, fail_at_node: str | Non
             "completed_nodes": ["human_approval"],
         }
 
-    stack.enter_context(
-        patch("harness.dag.langgraph_builder.human_approval_node", _auto_approve)
-    )
+    stack.enter_context(patch("harness.dag.langgraph_builder.human_approval_node", _auto_approve))
 
     return stack
 
@@ -233,31 +225,20 @@ class TestWaveExecution:
 
         # Run all three concurrently
         results = await asyncio.gather(
-            *[
-                _run_workflow_for_role(rn, e2e_db, sub_dirs[rn])
-                for rn in wave_1_roles
-            ],
+            *[_run_workflow_for_role(rn, e2e_db, sub_dirs[rn]) for rn in wave_1_roles],
             return_exceptions=True,
         )
 
         # All should succeed (no exceptions)
         for i, result in enumerate(results):
-            assert not isinstance(result, Exception), (
-                f"Role {wave_1_roles[i]} raised: {result}"
-            )
+            assert not isinstance(result, Exception), f"Role {wave_1_roles[i]} raised: {result}"
 
         # Each result should have completed the workflow
         for i, result in enumerate(results):
             completed = result.get("completed_nodes", [])
-            assert "validate_role" in completed, (
-                f"{wave_1_roles[i]} missing validate_role"
-            )
-            assert "report_summary" in completed, (
-                f"{wave_1_roles[i]} missing report_summary"
-            )
-            assert result.get("issue_iid") is not None, (
-                f"{wave_1_roles[i]} missing issue_iid"
-            )
+            assert "validate_role" in completed, f"{wave_1_roles[i]} missing validate_role"
+            assert "report_summary" in completed, f"{wave_1_roles[i]} missing report_summary"
+            assert result.get("issue_iid") is not None, f"{wave_1_roles[i]} missing issue_iid"
 
     @pytest.mark.asyncio
     async def test_wave_ordering(
@@ -292,9 +273,7 @@ class TestWaveExecution:
         # Verify the wave 1 role detected its dependency on common
         deps = wave1_result.get("explicit_deps", [])
         # The role has common as a dependency in the DB
-        assert "common" in deps, (
-            f"Wave 1 role should list 'common' as dependency; got {deps}"
-        )
+        assert "common" in deps, f"Wave 1 role should list 'common' as dependency; got {deps}"
 
     @pytest.mark.asyncio
     async def test_cross_wave_dependency(
@@ -322,18 +301,14 @@ class TestWaveExecution:
         # Run the wave-2 role
         wave2_dir = tmp_path / "wave2"
         wave2_dir.mkdir()
-        result = await _run_workflow_for_role(
-            "ems_platform_services", e2e_db, wave2_dir
-        )
+        result = await _run_workflow_for_role("ems_platform_services", e2e_db, wave2_dir)
 
         completed = result.get("completed_nodes", [])
 
         # analyze_dependencies should have detected the cross-wave dep
         assert "analyze_dependencies" in completed
         explicit = result.get("explicit_deps", [])
-        assert "common" in explicit, (
-            f"Cross-wave dependency 'common' not detected; got {explicit}"
-        )
+        assert "common" in explicit, f"Cross-wave dependency 'common' not detected; got {explicit}"
 
         # Workflow should have reached summary (common is not blocking
         # because ls-remote returns empty, and check_reverse_deps checks

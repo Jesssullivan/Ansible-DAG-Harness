@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-
 # =============================================================================
 # MOCK CHECKPOINTER
 # =============================================================================
@@ -49,7 +48,12 @@ def mock_checkpointer():
         return f"{thread_id}:{checkpoint_ns}"
 
     # Sync methods
-    def put(config: dict, checkpoint: dict, metadata: dict | None = None, new_versions: dict | None = None) -> dict:
+    def put(
+        config: dict,
+        checkpoint: dict,
+        metadata: dict | None = None,
+        new_versions: dict | None = None,
+    ) -> dict:
         key = _make_key(config)
         checkpoint_id = f"checkpoint_{len(store)}"
         entry = {
@@ -69,7 +73,9 @@ def mock_checkpointer():
             return entry["checkpoint"]
         return None
 
-    def list_checkpoints(config: dict, *, limit: int | None = None, before: dict | None = None) -> list[dict]:
+    def list_checkpoints(
+        config: dict, *, limit: int | None = None, before: dict | None = None
+    ) -> list[dict]:
         key = _make_key(config)
         entry = store.get(key)
         if entry:
@@ -95,7 +101,12 @@ def mock_checkpointer():
     mock.get_tuple.side_effect = get_tuple
 
     # Async methods (wrapping sync methods)
-    async def aput(config: dict, checkpoint: dict, metadata: dict | None = None, new_versions: dict | None = None) -> dict:
+    async def aput(
+        config: dict,
+        checkpoint: dict,
+        metadata: dict | None = None,
+        new_versions: dict | None = None,
+    ) -> dict:
         return put(config, checkpoint, metadata, new_versions)
 
     async def aget(config: dict) -> dict | None:
@@ -140,7 +151,12 @@ def mock_async_checkpointer():
         checkpoint_ns = config.get("configurable", {}).get("checkpoint_ns", "")
         return f"{thread_id}:{checkpoint_ns}"
 
-    async def aput(config: dict, checkpoint: dict, metadata: dict | None = None, new_versions: dict | None = None) -> dict:
+    async def aput(
+        config: dict,
+        checkpoint: dict,
+        metadata: dict | None = None,
+        new_versions: dict | None = None,
+    ) -> dict:
         key = _make_key(config)
         checkpoint_id = f"checkpoint_{len(store)}"
         entry = {
@@ -279,8 +295,13 @@ def checkpoint_data() -> dict[str, dict[str, Any]]:
                 "branch": "sid/common",
                 "current_node": "create_commit",
                 "completed_nodes": [
-                    "validate_role", "analyze_deps", "check_reverse_deps",
-                    "create_worktree", "run_molecule", "run_pytest", "validate_deploy"
+                    "validate_role",
+                    "analyze_deps",
+                    "check_reverse_deps",
+                    "create_worktree",
+                    "run_molecule",
+                    "run_pytest",
+                    "validate_deploy",
                 ],
                 "errors": [],
             },
@@ -316,9 +337,17 @@ def checkpoint_data() -> dict[str, dict[str, Any]]:
                 "mr_iid": 456,
                 "current_node": "human_approval",
                 "completed_nodes": [
-                    "validate_role", "analyze_deps", "check_reverse_deps",
-                    "create_worktree", "run_molecule", "run_pytest", "validate_deploy",
-                    "create_commit", "push_branch", "create_issue", "create_mr"
+                    "validate_role",
+                    "analyze_deps",
+                    "check_reverse_deps",
+                    "create_worktree",
+                    "run_molecule",
+                    "run_pytest",
+                    "validate_deploy",
+                    "create_commit",
+                    "push_branch",
+                    "create_issue",
+                    "create_mr",
                 ],
                 "awaiting_human_input": True,
                 "human_approved": None,
@@ -351,10 +380,20 @@ def checkpoint_data() -> dict[str, dict[str, Any]]:
                 "human_approved": True,
                 "current_node": "report_summary",
                 "completed_nodes": [
-                    "validate_role", "analyze_deps", "check_reverse_deps",
-                    "create_worktree", "run_molecule", "run_pytest", "validate_deploy",
-                    "create_commit", "push_branch", "create_issue", "create_mr",
-                    "human_approval", "add_to_merge_train", "report_summary"
+                    "validate_role",
+                    "analyze_deps",
+                    "check_reverse_deps",
+                    "create_worktree",
+                    "run_molecule",
+                    "run_pytest",
+                    "validate_deploy",
+                    "create_commit",
+                    "push_branch",
+                    "create_issue",
+                    "create_mr",
+                    "human_approval",
+                    "add_to_merge_train",
+                    "report_summary",
                 ],
                 "errors": [],
                 "summary": {
@@ -379,8 +418,11 @@ def checkpoint_data() -> dict[str, dict[str, Any]]:
                 "all_tests_passed": False,
                 "current_node": "notify_failure",
                 "completed_nodes": [
-                    "validate_role", "analyze_deps", "check_reverse_deps",
-                    "create_worktree", "run_molecule"
+                    "validate_role",
+                    "analyze_deps",
+                    "check_reverse_deps",
+                    "create_worktree",
+                    "run_molecule",
                 ],
                 "errors": ["Molecule tests failed: TASK [sql_server_2022] FAILED"],
             },

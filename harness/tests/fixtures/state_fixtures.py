@@ -16,7 +16,6 @@ import pytest
 
 from harness.dag.langgraph_engine import BoxUpRoleState
 
-
 # =============================================================================
 # INITIAL STATE FIXTURE
 # =============================================================================
@@ -138,9 +137,7 @@ def after_validate_state() -> BoxUpRoleState:
         explicit_deps=[],
         implicit_deps=[],
         reverse_deps=["sql_server_2022", "ems_web_app", "iis_config"],
-        credentials=[
-            {"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}
-        ],
+        credentials=[{"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}],
         tags=["infrastructure", "common"],
         blocking_deps=[],
         worktree_path="",
@@ -237,9 +234,7 @@ def after_molecule_state() -> BoxUpRoleState:
         explicit_deps=[],
         implicit_deps=[],
         reverse_deps=["sql_server_2022", "ems_web_app"],
-        credentials=[
-            {"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}
-        ],
+        credentials=[{"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}],
         tags=["infrastructure", "common"],
         blocking_deps=[],
         worktree_path="/path/to/.worktrees/sid-common",
@@ -360,9 +355,7 @@ def after_create_mr_state() -> BoxUpRoleState:
         explicit_deps=[],
         implicit_deps=[],
         reverse_deps=["sql_server_2022", "ems_web_app"],
-        credentials=[
-            {"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}
-        ],
+        credentials=[{"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}],
         tags=["infrastructure", "common"],
         blocking_deps=[],
         worktree_path="/path/to/.worktrees/sid-common",
@@ -437,9 +430,7 @@ def awaiting_approval_state() -> BoxUpRoleState:
         explicit_deps=[],
         implicit_deps=[],
         reverse_deps=["sql_server_2022", "ems_web_app"],
-        credentials=[
-            {"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}
-        ],
+        credentials=[{"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}],
         tags=["infrastructure", "common"],
         blocking_deps=[],
         worktree_path="/path/to/.worktrees/sid-common",
@@ -513,9 +504,7 @@ def completed_state() -> BoxUpRoleState:
         explicit_deps=[],
         implicit_deps=[],
         reverse_deps=["sql_server_2022", "ems_web_app"],
-        credentials=[
-            {"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}
-        ],
+        credentials=[{"entry_name": "ansible-self", "purpose": "WinRM auth", "is_base58": True}],
         tags=["infrastructure", "common"],
         blocking_deps=[],
         worktree_path="/path/to/.worktrees/sid-common",
@@ -611,7 +600,7 @@ def failed_state() -> BoxUpRoleState:
         molecule_passed=False,
         molecule_skipped=False,
         molecule_duration=180,
-        molecule_output="PLAY [Converge] ***\n\nTASK [sql_server_2022 : Install SQL Server] ***\nfatal: [vmnode876]: FAILED! => {\"msg\": \"Installation timed out\"}",
+        molecule_output='PLAY [Converge] ***\n\nTASK [sql_server_2022 : Install SQL Server] ***\nfatal: [vmnode876]: FAILED! => {"msg": "Installation timed out"}',
         pytest_passed=None,
         pytest_skipped=True,
         deploy_passed=None,
@@ -740,15 +729,17 @@ def failed_state_human_rejected() -> BoxUpRoleState:
 # =============================================================================
 
 
-@pytest.fixture(params=[
-    "initial_state",
-    "after_validate_state",
-    "after_molecule_state",
-    "after_create_mr_state",
-    "awaiting_approval_state",
-    "completed_state",
-    "failed_state",
-])
+@pytest.fixture(
+    params=[
+        "initial_state",
+        "after_validate_state",
+        "after_molecule_state",
+        "after_create_mr_state",
+        "awaiting_approval_state",
+        "completed_state",
+        "failed_state",
+    ]
+)
 def any_workflow_state(request) -> BoxUpRoleState:
     """
     Parametrized fixture that yields each workflow state in turn.

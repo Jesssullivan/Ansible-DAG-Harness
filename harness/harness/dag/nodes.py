@@ -7,13 +7,15 @@ Follows LangGraph patterns:
 - Conditional edges allow branching based on state
 """
 
-import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from harness.gitlab.http_client import GitLabAPIConfig
 
 
 class NodeResult(str, Enum):
@@ -489,7 +491,7 @@ class RunMoleculeTestsNode(Node):
 
         repo_root = ctx.repo_root or Path.cwd()
         worktree_path = ctx.get("worktree_path")
-        cwd = worktree_path if worktree_path else str(repo_root)
+        worktree_path if worktree_path else str(repo_root)
 
         # Load .env file from repo root for credentials
         env = self._load_env_file(repo_root)
@@ -636,6 +638,7 @@ class _GitLabNodeMixin:
     def _get_gitlab_api_config(repo_root: Path) -> "GitLabAPIConfig":
         """Get GitLab API config from harness.yml and environment."""
         from harness.gitlab.http_client import GitLabAPIConfig
+
         return GitLabAPIConfig.from_harness_yml(repo_root)
 
     @staticmethod
@@ -727,7 +730,7 @@ class CreateGitLabIssueNode(_GitLabNodeMixin, Node):
                 "error": f"GitLab API error: {e}",
                 "status_code": e.status_code,
             }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return NodeResult.RETRY, {"error": "Issue creation timed out"}
         except Exception as e:
             return NodeResult.FAILURE, {"error": str(e)}
@@ -813,7 +816,7 @@ class CreateMergeRequestNode(_GitLabNodeMixin, Node):
                 "error": f"GitLab API error: {e}",
                 "status_code": e.status_code,
             }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return NodeResult.RETRY, {"error": "MR creation timed out"}
         except Exception as e:
             return NodeResult.FAILURE, {"error": str(e)}

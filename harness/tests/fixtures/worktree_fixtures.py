@@ -7,7 +7,6 @@ Provides comprehensive mocking for:
 - Git add/commit/push operations
 """
 
-import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -16,7 +15,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from harness.db.models import WorktreeStatus
-
 
 # =============================================================================
 # WORKTREE STATUS TEST CASES
@@ -320,14 +318,10 @@ def mock_worktree_manager():
     mock_manager.sync_all.return_value = len(worktrees_data)
 
     # Configure get_stale
-    mock_manager.get_stale.return_value = [
-        wt for wt in worktrees_data if wt.behind > 10
-    ]
+    mock_manager.get_stale.return_value = [wt for wt in worktrees_data if wt.behind > 10]
 
     # Configure get_dirty
-    mock_manager.get_dirty.return_value = [
-        wt for wt in worktrees_data if wt.uncommitted > 0
-    ]
+    mock_manager.get_dirty.return_value = [wt for wt in worktrees_data if wt.uncommitted > 0]
 
     # Configure prune
     mock_manager.prune.return_value = 0
@@ -400,10 +394,12 @@ def mock_git_operations():
                 msg_idx = cmd.index("-m") + 1
                 if msg_idx < len(cmd):
                     message = cmd[msg_idx]
-            state["commits"].append({
-                "message": message,
-                "files": state["staged_files"].copy(),
-            })
+            state["commits"].append(
+                {
+                    "message": message,
+                    "files": state["staged_files"].copy(),
+                }
+            )
             state["staged_files"] = []
             state["current_commit"] = "new_commit_sha"
             result.stdout = f"[{state['current_branch']} new_commit_sha] {message}\n"
@@ -413,10 +409,12 @@ def mock_git_operations():
         if subcmd == "push":
             remote = cmd[2] if len(cmd) > 2 else "origin"
             branch = cmd[3] if len(cmd) > 3 else state["current_branch"]
-            state["pushes"].append({
-                "remote": remote,
-                "branch": branch,
-            })
+            state["pushes"].append(
+                {
+                    "remote": remote,
+                    "branch": branch,
+                }
+            )
             result.stdout = f"To {remote}\n * [new branch] {branch} -> {branch}\n"
             return result
 
@@ -425,7 +423,9 @@ def mock_git_operations():
             if "--porcelain" in cmd:
                 result.stdout = ""  # Clean working directory
             else:
-                result.stdout = f"On branch {state['current_branch']}\nnothing to commit, working tree clean\n"
+                result.stdout = (
+                    f"On branch {state['current_branch']}\nnothing to commit, working tree clean\n"
+                )
             return result
 
         # git rev-parse

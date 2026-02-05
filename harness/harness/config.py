@@ -15,7 +15,6 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -82,13 +81,28 @@ class WorktreeConfig:
 
 @dataclass
 class TestingConfig:
-    """Testing configuration."""
+    """Testing configuration.
+
+    Attributes:
+        molecule_required: Whether molecule tests are required.
+        pytest_required: Whether pytest tests are required.
+        deploy_target: Target VM for deployment (e.g., "vmnode852").
+        molecule_timeout: Timeout for molecule tests in seconds.
+        pytest_timeout: Timeout for pytest tests in seconds.
+        tunnel_auto_start: Auto-start SSH tunnels for 8xx series hosts.
+        tunnel_startup_timeout: Timeout for tunnel startup in seconds.
+        tunnel_script: Path to tunnel script (relative to repo_root).
+    """
 
     molecule_required: bool = True
     pytest_required: bool = True
     deploy_target: str = "vmnode852"
     molecule_timeout: int = 600
     pytest_timeout: int = 300
+    # SSH tunnel configuration for 8xx series hosts (v0.6.1)
+    tunnel_auto_start: bool = True
+    tunnel_startup_timeout: int = 30
+    tunnel_script: str = "scripts/start-winrm-tunnels.sh"
 
 
 @dataclass
@@ -237,7 +251,7 @@ class HarnessConfig:
     @classmethod
     def _load_from_file(cls, path: str) -> "HarnessConfig":
         """Load configuration from YAML file.
-        
+
         Relative paths in the config (repo_root, db_path) are resolved
         relative to the config file's directory, not the CWD.
         """
@@ -288,6 +302,12 @@ class HarnessConfig:
                 deploy_target=t.get("deploy_target", config.testing.deploy_target),
                 molecule_timeout=t.get("molecule_timeout", config.testing.molecule_timeout),
                 pytest_timeout=t.get("pytest_timeout", config.testing.pytest_timeout),
+                # SSH tunnel configuration (v0.6.1)
+                tunnel_auto_start=t.get("tunnel_auto_start", config.testing.tunnel_auto_start),
+                tunnel_startup_timeout=t.get(
+                    "tunnel_startup_timeout", config.testing.tunnel_startup_timeout
+                ),
+                tunnel_script=t.get("tunnel_script", config.testing.tunnel_script),
             )
 
         if "notifications" in data:
@@ -393,6 +413,9 @@ class HarnessConfig:
                 "deploy_target": self.testing.deploy_target,
                 "molecule_timeout": self.testing.molecule_timeout,
                 "pytest_timeout": self.testing.pytest_timeout,
+                "tunnel_auto_start": self.testing.tunnel_auto_start,
+                "tunnel_startup_timeout": self.testing.tunnel_startup_timeout,
+                "tunnel_script": self.testing.tunnel_script,
             },
             "notifications": {
                 "discord_webhook_url": self.notifications.discord_webhook_url,
@@ -512,7 +535,7 @@ class CheckpointerConfig(BaseModel):
 
     backend: str = "sqlite"  # sqlite, postgres
     sqlite_path: str = ".harness/checkpoints.db"
-    postgres_url: Optional[str] = None
+    postgres_url: str | None = None
     sync_to_statedb: bool = True
 
     @field_validator("backend")
@@ -526,13 +549,11 @@ class CheckpointerConfig(BaseModel):
 
     @field_validator("postgres_url")
     @classmethod
-    def validate_postgres_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_postgres_url(cls, v: str | None) -> str | None:
         """Validate postgres URL format if provided."""
         if v is not None:
             if not v.startswith(("postgresql://", "postgres://")):
-                raise ValueError(
-                    "postgres_url must start with 'postgresql://' or 'postgres://'"
-                )
+                raise ValueError("postgres_url must start with 'postgresql://' or 'postgres://'")
         return v
 
 

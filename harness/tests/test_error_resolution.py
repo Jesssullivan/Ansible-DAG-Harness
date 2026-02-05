@@ -11,8 +11,6 @@ Tests cover:
 - should_attempt_recovery_v2 with RecoveryConfig (v0.6.0)
 """
 
-import pytest
-
 from harness.dag.error_resolution import (
     ClassifiedError,
     ErrorType,
@@ -306,7 +304,12 @@ class TestErrorTypeEnum:
 
     def test_types_are_distinct(self):
         """All error types should be distinct."""
-        types = [ErrorType.TRANSIENT, ErrorType.RECOVERABLE, ErrorType.USER_FIXABLE, ErrorType.UNEXPECTED]
+        types = [
+            ErrorType.TRANSIENT,
+            ErrorType.RECOVERABLE,
+            ErrorType.USER_FIXABLE,
+            ErrorType.UNEXPECTED,
+        ]
         values = [t.value for t in types]
         assert len(set(values)) == len(values)
 
@@ -374,9 +377,7 @@ class TestShouldAttemptRecoveryV2:
         from harness.dag.recovery_config import RecoveryConfig
 
         config = RecoveryConfig(max_iterations=5)
-        state = {
-            "recovery_attempts": [{"node": "test", "hint": "fix"} for _ in range(4)]
-        }
+        state = {"recovery_attempts": [{"node": "test", "hint": "fix"} for _ in range(4)]}
         assert should_attempt_recovery_v2(state, "test", config=config) is True
 
         state["recovery_attempts"].append({"node": "test", "hint": "fix"})
@@ -385,16 +386,12 @@ class TestShouldAttemptRecoveryV2:
     def test_uses_registry_when_no_config(self):
         """Should look up config from registry when none provided."""
         # run_molecule has max_iterations=12
-        state = {
-            "recovery_attempts": [{"node": "run_molecule", "hint": "fix"} for _ in range(10)]
-        }
+        state = {"recovery_attempts": [{"node": "run_molecule", "hint": "fix"} for _ in range(10)]}
         assert should_attempt_recovery_v2(state, "run_molecule") is True
 
     def test_backward_compat_with_v050(self):
         """v0.5.0 should_attempt_recovery should still work."""
-        state = {
-            "recovery_attempts": [{"node": "test", "hint": "fix"}]
-        }
+        state = {"recovery_attempts": [{"node": "test", "hint": "fix"}]}
         # Original function with explicit max_attempts
         assert should_attempt_recovery(state, "test", max_attempts=2) is True
         state["recovery_attempts"].append({"node": "test", "hint": "fix"})

@@ -2,12 +2,15 @@
 #
 # Build: mkdocs build
 # Serve locally: mkdocs serve
-# Deploy: via GitLab CI to Pages
+# Deploy: via GitLab CI / GitHub Actions to Pages
 
 site_name: DAG Harness
 site_description: LangGraph DAG orchestration for Ansible roles
 site_author: Jess Sullivan
 site_url: https://disposable-ansible-dag.ephemera.xoxd.ai
+
+repo_url: https://github.com/Jesssullivan/Ansible-DAG-Harness
+repo_name: dag-harness
 
 # Theme configuration
 theme:
@@ -29,19 +32,35 @@ theme:
     - navigation.tabs
     - navigation.sections
     - navigation.top
+    - navigation.expand
     - search.highlight
     - search.suggest
     - content.code.copy
+    - content.code.annotate
 
 # Navigation structure
 nav:
   - Home: index.md
-  - Quick Start: quickstart.md
-  - Configuration: configuration.md
-  - Architecture: architecture.md
-  - Claude Code Integration: claude-code-integration.md
-  - API Reference: api-reference.md
-  - LLM Docs:
+  - Getting Started:
+    - Quick Start: quickstart.md
+    - Installation: getting-started.md
+    - Configuration: configuration.md
+  - Architecture:
+    - Overview: architecture.md
+    - LangGraph Audit: architecture/LANGGRAPH-AUDIT.md
+  - Guides:
+    - Claude Code Integration: claude-code-integration.md
+    - Vignettes:
+      - Basic Workflow: vignettes/01-basic-workflow.md
+      - HOTL Autonomous: vignettes/02-hotl-autonomous.md
+      - Parallel Waves: vignettes/03-parallel-waves.md
+      - Self Installation: vignettes/04-self-installation.md
+  - API Reference:
+    - Overview: api-reference.md
+    - CLI Commands: api/cli.md
+    - MCP Tools: api/mcp-tools.md
+    - Python API: api/python.md
+  - For LLMs:
     - llms.txt: llms.txt
     - llms.md: llms.md
   - Troubleshooting: troubleshooting.md
@@ -55,11 +74,19 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - tables
   - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 # Plugins
 plugins:
@@ -74,6 +101,14 @@ plugins:
             show_root_heading: true
             show_root_toc_entry: true
             heading_level: 2
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Jesssullivan/dag-harness
+    - icon: fontawesome/brands/gitlab
+      link: https://gitlab.com/tinyland/projects/dag-harness
 
 # Copyright
 copyright: Copyright &copy; 2026 Tinyland.dev, Inc. — <a href="https://xoxd.ai">xoxd.ai</a>

@@ -12,7 +12,7 @@ are available:
 - Tier 4: Fail fast, persist diagnostics, escalate (UNEXPECTED)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

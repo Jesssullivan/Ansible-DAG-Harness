@@ -119,14 +119,10 @@ class TestSetupScript:
         """setup.sh starts with a bash shebang line."""
         setup_path = Path(__file__).parent.parent / "scripts" / "setup.sh"
         content = setup_path.read_text()
-        assert content.startswith("#!/usr/bin/env bash"), (
-            "setup.sh missing bash shebang"
-        )
+        assert content.startswith("#!/usr/bin/env bash"), "setup.sh missing bash shebang"
 
     def test_setup_script_uses_strict_mode(self) -> None:
         """setup.sh uses set -euo pipefail for safety."""
         setup_path = Path(__file__).parent.parent / "scripts" / "setup.sh"
         content = setup_path.read_text()
-        assert "set -euo pipefail" in content, (
-            "setup.sh missing strict mode (set -euo pipefail)"
-        )
+        assert "set -euo pipefail" in content, "setup.sh missing strict mode (set -euo pipefail)"

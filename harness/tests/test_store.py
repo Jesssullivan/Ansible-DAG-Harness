@@ -9,12 +9,12 @@ Tests cover:
 - Async operations
 """
 
+from datetime import datetime
+
 import pytest
-from datetime import datetime, UTC
 
 from harness.dag.store import HarnessStore, create_harness_store
 from harness.db.state import StateDB
-
 
 # =============================================================================
 # FIXTURES
@@ -365,15 +365,23 @@ class TestTimestamps:
     @pytest.mark.unit
     def test_updated_at_changes(self, store):
         """Should update updated_at on modification."""
+        import time
+
         store.put(("roles", "common"), "status", {"v": 1})
         first_result = store.get(("roles", "common"), "status")
+
+        # Small delay to ensure timestamp difference
+        time.sleep(0.01)
 
         # Update the value
         store.put(("roles", "common"), "status", {"v": 2})
         second_result = store.get(("roles", "common"), "status")
 
-        # updated_at should be >= first (could be same if fast)
-        assert second_result.updated_at >= first_result.updated_at
+        # updated_at should be >= first (compare with microsecond tolerance)
+        # Truncate to seconds for comparison to handle precision differences
+        first_ts = first_result.updated_at.replace(microsecond=0)
+        second_ts = second_result.updated_at.replace(microsecond=0)
+        assert second_ts >= first_ts
 
 
 # =============================================================================

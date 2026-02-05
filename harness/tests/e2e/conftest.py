@@ -13,16 +13,15 @@ import uuid
 from collections.abc import Generator
 from dataclasses import dataclass, field
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from harness.config import GitLabConfig, HarnessConfig
-from harness.db.models import Role, RoleDependency, DependencyType
+from harness.db.models import DependencyType, Role, RoleDependency
 from harness.db.state import StateDB
 
 from .utils import cleanup_test_artifacts
-
 
 # ============================================================================
 # PYTEST CONFIGURATION

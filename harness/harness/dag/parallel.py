@@ -22,7 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Literal, TypedDict
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, StateGraph
@@ -301,7 +301,9 @@ async def merge_wave_results_node(state: WaveExecutionState) -> dict:
     logger = logging.getLogger(__name__)
     logger.info(
         f"Wave execution completed: {success_count}/{len(role_names)} roles succeeded, "
-        f"duration={duration:.1f}s" if duration else ""
+        f"duration={duration:.1f}s"
+        if duration
+        else ""
     )
 
     return {

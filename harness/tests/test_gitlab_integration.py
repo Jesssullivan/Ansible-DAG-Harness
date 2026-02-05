@@ -12,16 +12,14 @@ Tests marked with @pytest.mark.unit are fully mocked and CI-safe.
 Tests that would need @pytest.mark.integration for real API calls are noted in docstrings.
 """
 
-import asyncio
 import json
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
 from harness.gitlab import (
-    GitLabClient,
     GitLabGraphQLClient,
     GitLabGraphQLError,
     GraphQLErrorLocation,
@@ -47,7 +45,6 @@ from harness.gitlab.idempotency import (
     _cache,
 )
 from harness.gitlab.retry import gitlab_retry, gitlab_retry_async
-
 
 # =============================================================================
 # TEST CLASS 1: IDEMPOTENCY
@@ -238,7 +235,6 @@ class TestIdempotency:
         clear_cache()
 
         # Use the cache directly to avoid decorator quirks
-        from harness.gitlab.idempotency import _cache, CacheEntry
 
         # No entries initially (after clearing)
         stats = get_cache_stats()
@@ -333,11 +329,11 @@ class TestGraphQL:
 
         Note: Would need @pytest.mark.integration to execute against real API.
         """
-        client = GitLabGraphQLClient()
+        GitLabGraphQLClient()
 
         # Test the mutation structure by checking the client method signature
         # The actual mutation is embedded in assign_issue_to_iteration
-        iteration_gid = f"gid://gitlab/Iteration/12345"
+        iteration_gid = "gid://gitlab/Iteration/12345"
 
         # Verify GID format
         assert iteration_gid.startswith("gid://gitlab/Iteration/")
@@ -456,9 +452,7 @@ class TestGraphQL:
         assert str(simple) == "Test error"
 
         # Error with path
-        with_path = GitLabGraphQLError(
-            message="Field error", path=["project", "issues", 0]
-        )
+        with_path = GitLabGraphQLError(message="Field error", path=["project", "issues", 0])
         assert "project.issues.0" in str(with_path)
 
         # Error with locations
@@ -470,9 +464,7 @@ class TestGraphQL:
         assert "column 10" in str(with_loc)
 
         # Error with extensions
-        with_ext = GitLabGraphQLError(
-            message="Auth error", extensions={"code": "UNAUTHORIZED"}
-        )
+        with_ext = GitLabGraphQLError(message="Auth error", extensions={"code": "UNAUTHORIZED"})
         assert "UNAUTHORIZED" in str(with_ext)
 
 
@@ -1120,7 +1112,6 @@ class TestCacheClearPatterns:
         clear_cache()
 
         # Use cache directly to avoid decorator quirks with local function names
-        from harness.gitlab.idempotency import _cache, CacheEntry
 
         now = time.time()
 
@@ -1152,7 +1143,6 @@ class TestCacheClearPatterns:
         clear_cache()
 
         # Use cache directly
-        from harness.gitlab.idempotency import _cache, CacheEntry
 
         now = time.time()
 

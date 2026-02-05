@@ -1,0 +1,45 @@
+# dag-harness development environment template
+# Copy to .envrc and run: direnv allow
+#
+# Requires: direnv (https://direnv.net/)
+
+# Fail if not in dag-harness directory
+[[ -f "harness/pyproject.toml" ]] || {
+    echo "Not in dag-harness root directory"
+    return 1
+}
+
+# Load .env if exists (local secrets)
+dotenv_if_exists .env
+
+# Activate Python virtual environment if exists
+if [[ -d "harness/.venv" ]]; then
+    source harness/.venv/bin/activate
+    PATH_add harness/.venv/bin
+else
+    echo "No .venv found. Run: cd harness && uv sync"
+fi
+
+# Add local scripts to PATH
+PATH_add scripts
+
+# Project-specific environment
+export HARNESS_PROJECT_ROOT="${PWD}"
+export HARNESS_CONFIG="${PWD}/harness/harness.yml"
+
+# Development defaults (override in .env)
+export HARNESS_LOG_LEVEL="${HARNESS_LOG_LEVEL:-INFO}"
+export HARNESS_DB_PATH="${HARNESS_DB_PATH:-harness/harness.db}"
+
+# Python settings
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONUNBUFFERED=1
+
+# uv settings
+export UV_LINK_MODE=copy
+export UV_PYTHON_DOWNLOADS=never
+
+# Prompt indicator
+export HARNESS_DEV=1
+
+echo "dag-harness dev environment activated"

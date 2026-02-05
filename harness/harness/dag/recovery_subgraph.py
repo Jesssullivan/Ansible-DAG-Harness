@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import logging
 import operator
-import subprocess
 from pathlib import Path
 from typing import Annotated, Any, TypedDict
 
@@ -100,8 +99,6 @@ async def analyze_failure_node(state: RecoveryState) -> dict:
     immediately (skipping plan/execute).
     """
     from harness.dag.error_resolution import (
-        ClassifiedError,
-        ErrorType,
         classify_error,
         lookup_recovery_memory,
         select_recovery_tier,
@@ -190,8 +187,6 @@ async def plan_fix_node(state: RecoveryState) -> dict:
     - Tier 3: Build system prompt + task description for Claude SDK agent
     """
     from harness.dag.error_resolution import (
-        ClassifiedError,
-        ErrorType,
         classify_error,
     )
 
@@ -265,9 +260,7 @@ async def execute_fix_node(state: RecoveryState) -> dict:
     - Tier 3: Spawn Claude SDK agent
     """
     from harness.dag.error_resolution import (
-        attempt_resolution,
         classify_error,
-        create_recovery_state_update,
     )
 
     tier = state.get("recovery_tier", 1)
@@ -511,9 +504,7 @@ async def escalate_to_human(
     return {
         "recovery_result": "escalate",
         "awaiting_human_input": True,
-        "errors": [
-            f"Recovery exhausted after {iteration} iterations for {failed_node}"
-        ],
+        "errors": [f"Recovery exhausted after {iteration} iterations for {failed_node}"],
     }
 
 
@@ -576,8 +567,8 @@ def _build_tier2_plan(failed_node: str, error: Any, state: RecoveryState) -> str
         )
     if failed_node in ("run_molecule", "run_pytest"):
         return (
-            f"Tier 2: Re-run failing test with verbose output, "
-            f"check for missing dependencies or configuration"
+            "Tier 2: Re-run failing test with verbose output, "
+            "check for missing dependencies or configuration"
         )
     return f"Tier 2: Investigate {failed_node} failure via subprocess commands"
 
@@ -590,7 +581,7 @@ async def _execute_tier2(
 ) -> dict:
     """Execute a tier 2 fix (subprocess-based investigation and fix)."""
     worktree_path = state.get("worktree_path", ".")
-    role_name = state.get("role_name", "unknown")
+    state.get("role_name", "unknown")
 
     resolution = {}
 
@@ -671,13 +662,13 @@ async def _execute_tier3(
     try:
         from harness.dag.langgraph_state import get_module_config, get_module_db
         from harness.hotl.claude_sdk_integration import (
+            PermissionMode,
             SDKAgentConfig,
             SDKClaudeIntegration,
-            PermissionMode,
         )
 
         db = get_module_db()
-        config = get_module_config()
+        get_module_config()
 
         if db is None:
             return {
@@ -698,9 +689,11 @@ async def _execute_tier3(
         from harness.dag.recovery_config import get_recovery_config
 
         rc = get_recovery_config(failed_node)
-        allowed_tools = list(rc.allowed_tools) if rc.allowed_tools else [
-            "Read", "Write", "Edit", "Bash", "Glob", "Grep"
-        ]
+        allowed_tools = (
+            list(rc.allowed_tools)
+            if rc.allowed_tools
+            else ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]
+        )
 
         agent_config = SDKAgentConfig(
             system_prompt=system_prompt,
@@ -793,8 +786,10 @@ def _format_recovery_summary(state: RecoveryState) -> str:
     ]
 
     for action in actions[-10:]:  # Last 10 actions
-        lines.append(f"  - [{action.get('iteration', '?')}] {action.get('action', '?')}: "
-                      f"{action.get('result', action.get('strategy', 'N/A'))}")
+        lines.append(
+            f"  - [{action.get('iteration', '?')}] {action.get('action', '?')}: "
+            f"{action.get('result', action.get('strategy', 'N/A'))}"
+        )
 
     return "\n".join(lines)
 

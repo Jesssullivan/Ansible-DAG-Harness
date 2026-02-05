@@ -229,12 +229,58 @@ async def check_reverse_deps_node(state: BoxUpRoleState) -> dict:
 # ============================================================================
 
 
+def _sync_worktree_dependencies(worktree_path: str, timeout: int = 120) -> tuple[bool, str]:
+    """
+    Sync Python dependencies in a worktree using uv.
+
+    Runs `uv sync --extra test` to ensure molecule and test dependencies
+    are available for molecule tests.
+
+    Args:
+        worktree_path: Path to the worktree.
+        timeout: Timeout in seconds for the sync operation.
+
+    Returns:
+        Tuple of (success: bool, message: str).
+    """
+    try:
+        # Check if pyproject.toml exists
+        pyproject = Path(worktree_path) / "pyproject.toml"
+        if not pyproject.exists():
+            return True, "No pyproject.toml found, skipping dependency sync"
+
+        result = subprocess.run(
+            ["uv", "sync", "--extra", "test"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=worktree_path,
+        )
+
+        if result.returncode == 0:
+            return True, "Dependencies synced successfully"
+
+        # Non-zero return but not a critical failure
+        error_msg = result.stderr.strip() or result.stdout.strip()
+        return False, f"Dependency sync returned non-zero: {error_msg[:500]}"
+
+    except subprocess.TimeoutExpired:
+        return False, f"Dependency sync timed out after {timeout}s"
+    except FileNotFoundError:
+        return False, "uv not found in PATH"
+    except Exception as e:
+        return False, f"Dependency sync error: {e}"
+
+
 async def create_worktree_node(state: BoxUpRoleState) -> dict:
     """
     Create git worktree for isolated development using WorktreeManager.
 
     Supports self-correction for 'worktree already exists' errors via
     the worktree_force_recreate flag.
+
+    v0.6.1: Automatically syncs test dependencies after worktree creation
+    to ensure molecule is available.
     """
     from harness.dag.error_resolution import (
         ErrorType,
@@ -276,9 +322,7 @@ async def create_worktree_node(state: BoxUpRoleState) -> dict:
             if branch_force_recreate:
                 # Also delete local and remote branch
                 branch = f"sid/{role_name}"
-                subprocess.run(
-                    ["git", "branch", "-D", branch], capture_output=True, text=True
-                )
+                subprocess.run(["git", "branch", "-D", branch], capture_output=True, text=True)
                 subprocess.run(
                     ["git", "push", "origin", "--delete", branch],
                     capture_output=True,
@@ -290,6 +334,13 @@ async def create_worktree_node(state: BoxUpRoleState) -> dict:
         is_new_role = state.get("is_new_role", True)
         base_ref = "HEAD" if is_new_role else None  # None = default to origin/main
         worktree_info = manager.create(role_name, force=force_recreate, base_ref=base_ref)
+
+        # v0.6.1: Sync test dependencies in worktree for molecule availability
+        sync_success, sync_message = _sync_worktree_dependencies(worktree_info.path)
+        if sync_success:
+            logger.info(f"Worktree dependency sync: {sync_message}")
+        else:
+            logger.warning(f"Worktree dependency sync failed: {sync_message}")
 
         return {
             "worktree_path": worktree_info.path,
@@ -325,10 +376,15 @@ async def create_worktree_node(state: BoxUpRoleState) -> dict:
 
         # No existing worktree in db - for recoverable errors, attempt self-correction
         # Only attempt recovery if we haven't already tried force recreate
-        if error.error_type == ErrorType.RECOVERABLE and not force_recreate and not branch_force_recreate:
+        if (
+            error.error_type == ErrorType.RECOVERABLE
+            and not force_recreate
+            and not branch_force_recreate
+        ):
             if should_attempt_recovery(state, "create_worktree"):
                 # Get the appropriate resolution based on the error hint
                 from harness.dag.error_resolution import attempt_resolution
+
                 resolution = attempt_resolution(error.resolution_hint, error.context, state)
                 if resolution is None:
                     # Fallback to worktree force recreate
@@ -363,7 +419,11 @@ async def create_worktree_node(state: BoxUpRoleState) -> dict:
 
         # Check for recoverable runtime errors
         # Only attempt recovery if we haven't already tried force recreate
-        if error.error_type == ErrorType.RECOVERABLE and not force_recreate and not branch_force_recreate:
+        if (
+            error.error_type == ErrorType.RECOVERABLE
+            and not force_recreate
+            and not branch_force_recreate
+        ):
             if should_attempt_recovery(state, "create_worktree"):
                 update = create_recovery_state_update(
                     "create_worktree",
@@ -407,6 +467,9 @@ async def run_molecule_node(state: BoxUpRoleState) -> dict:
 
     Supports parallel execution (Task #21) - can run concurrently with run_pytest.
     Tracks execution time for performance benchmarking.
+
+    v0.6.1: Includes SSH tunnel pre-flight check for 8xx series hosts.
+    If deploy_target requires tunneling, verifies connectivity before running tests.
     """
     role_name = state["role_name"]
     has_molecule = state.get("has_molecule_tests", False)
@@ -423,11 +486,65 @@ async def run_molecule_node(state: BoxUpRoleState) -> dict:
     start_time = time.time()
     test_name = f"molecule:{role_name}"
 
-    # Get timeout from config
+    # Get config
     harness_config = get_module_config()
     timeout = 600  # default 10 minutes
+    deploy_target = "vmnode852"  # default
+    tunnel_auto_start = True
+    tunnel_startup_timeout = 30
+
     if harness_config and hasattr(harness_config, "testing"):
         timeout = harness_config.testing.molecule_timeout
+        deploy_target = harness_config.testing.deploy_target
+        tunnel_auto_start = getattr(harness_config.testing, "tunnel_auto_start", True)
+        tunnel_startup_timeout = getattr(harness_config.testing, "tunnel_startup_timeout", 30)
+
+    # v0.6.1: SSH tunnel pre-flight check for 8xx series hosts
+    from harness.tunnel_preflight import (
+        TUNNEL_PORTS,
+        ensure_tunnel_connectivity,
+        is_tunneled_host,
+    )
+
+    if is_tunneled_host(deploy_target):
+        repo_root = Path(harness_config.repo_root if harness_config else worktree_path)
+
+        # Check if tunnel script exists - skip preflight if not (e.g., test environments)
+        tunnel_script_path = repo_root / "scripts" / "start-winrm-tunnels.sh"
+        if not tunnel_script_path.exists():
+            logger.debug(
+                f"Tunnel script not found at {tunnel_script_path}, skipping tunnel preflight. "
+                f"This is expected in test environments."
+            )
+        else:
+            success, message = ensure_tunnel_connectivity(
+                host=deploy_target,
+                repo_root=repo_root,
+                auto_start=tunnel_auto_start,
+                startup_timeout=tunnel_startup_timeout,
+            )
+
+            if not success:
+                # Return recoverable error for recovery subgraph
+                tunnel_port = TUNNEL_PORTS.get(deploy_target)
+                logger.warning(f"Tunnel pre-flight failed for {deploy_target}: {message}")
+                return {
+                    "molecule_passed": False,
+                    "molecule_output": f"Tunnel pre-flight failed: {message}",
+                    "last_error_type": "recoverable",
+                    "last_error_message": f"SSH tunnel not available for {deploy_target}",
+                    "last_error_node": "run_molecule",
+                    "recovery_context": {
+                        "deploy_target": deploy_target,
+                        "tunnel_port": tunnel_port,
+                        "resolution_hint": "start_tunnel",
+                    },
+                    "deploy_target": deploy_target,
+                    "parallel_tests_completed": ["run_molecule"],
+                    "completed_nodes": ["run_molecule_tests"],
+                }
+            else:
+                logger.info(f"Tunnel pre-flight passed for {deploy_target}: {message}")
 
     try:
         # Load environment variables from .env files
@@ -468,7 +585,7 @@ async def run_molecule_node(state: BoxUpRoleState) -> dict:
                 "molecule_output": error_msg,  # Prioritize error output for failed tests
                 "molecule_stdout": result.stdout[-2000:] if result.stdout else "",
                 "molecule_stderr": result.stderr[-2000:] if result.stderr else "",
-                "deploy_target": "vmnode852",  # Default test target
+                "deploy_target": deploy_target,
                 "parallel_tests_completed": ["run_molecule"],
                 "completed_nodes": ["run_molecule_tests"],
             }
@@ -481,7 +598,7 @@ async def run_molecule_node(state: BoxUpRoleState) -> dict:
             "molecule_passed": True,
             "molecule_duration": duration,
             "molecule_output": result.stdout[-2000:] if result.stdout else "",
-            "deploy_target": "vmnode852",  # Default test target
+            "deploy_target": deploy_target,
             "parallel_tests_completed": ["run_molecule"],
             "completed_nodes": ["run_molecule_tests"],
         }
@@ -967,7 +1084,11 @@ Wave {wave}: {wave_name}
                 logger.info(f"Assigning to iteration: {iteration.get('title')}")
 
             # Prepare labels
-            labels = config.default_labels.copy() if config.default_labels else ["role", "ansible", "molecule"]
+            labels = (
+                config.default_labels.copy()
+                if config.default_labels
+                else ["role", "ansible", "molecule"]
+            )
             wave_label = f"wave-{wave}"
             if wave_label not in labels:
                 labels.append(wave_label)
@@ -1091,7 +1212,11 @@ async def create_mr_node(state: BoxUpRoleState) -> dict:
                 }
 
             # Prepare labels
-            labels = config.default_labels.copy() if config.default_labels else ["role", "ansible", "molecule"]
+            labels = (
+                config.default_labels.copy()
+                if config.default_labels
+                else ["role", "ansible", "molecule"]
+            )
             wave_label = f"wave-{wave}"
             if wave_label not in labels:
                 labels.append(wave_label)
@@ -1389,7 +1514,8 @@ async def notify_failure_node(state: BoxUpRoleState) -> dict:
         db = get_module_db()
         if db is not None:
             try:
-                from harness.gitlab.api import GitLabClient, GitLabConfig as ApiGitLabConfig
+                from harness.gitlab.api import GitLabClient
+                from harness.gitlab.api import GitLabConfig as ApiGitLabConfig
 
                 harness_config = get_module_config()
                 api_config = None

@@ -18,9 +18,9 @@ import logging
 import subprocess
 import time
 import urllib.parse
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar, ParamSpec
+from typing import Any, ParamSpec, TypeVar
 
 from harness.db.models import Issue, MergeRequest
 from harness.db.state import StateDB
@@ -73,7 +73,9 @@ def cache_result(ttl_seconds: int = 300):
             # Build cache key from function name and arguments
             # Skip 'self' argument for methods
             cache_args = args[1:] if args and hasattr(args[0], "__class__") else args
-            cache_key = f"{func.__module__}.{func.__qualname__}:{cache_args}:{sorted(kwargs.items())}"
+            cache_key = (
+                f"{func.__module__}.{func.__qualname__}:{cache_args}:{sorted(kwargs.items())}"
+            )
 
             # Check cache
             now = time.time()
@@ -326,9 +328,7 @@ class IdempotencyHelper:
             # Update local database
             self.db.upsert_issue(issue)
 
-            logger.info(
-                f"Found existing issue for '{role_name}': #{issue.iid} ({issue.state})"
-            )
+            logger.info(f"Found existing issue for '{role_name}': #{issue.iid} ({issue.state})")
             return issue
 
         except RuntimeError as e:
@@ -364,9 +364,7 @@ class IdempotencyHelper:
             )
 
             if not mrs:
-                logger.debug(
-                    f"No MRs found for source_branch '{source_branch}' with state={state}"
-                )
+                logger.debug(f"No MRs found for source_branch '{source_branch}' with state={state}")
                 return None
 
             # Return the first (most recent) MR for this branch
@@ -544,7 +542,9 @@ def _get_helper(db: StateDB | None = None) -> IdempotencyHelper:
     return _helper
 
 
-def find_existing_issue(role_name: str, state: str = "all", db: StateDB | None = None) -> Issue | None:
+def find_existing_issue(
+    role_name: str, state: str = "all", db: StateDB | None = None
+) -> Issue | None:
     """
     Find existing issue for a role.
 

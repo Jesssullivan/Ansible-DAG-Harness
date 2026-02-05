@@ -13,7 +13,7 @@ framework directly.
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +123,7 @@ def log_tool_invocation(
         conn = _get_connection(str(db_file))
         _ensure_schema(conn)
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         arguments_json = json.dumps(tool_input, default=str)
 
         if phase == "pre":
@@ -205,7 +205,7 @@ def log_blocked_invocation(
         conn = _get_connection(str(db_file))
         _ensure_schema(conn)
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         arguments_json = json.dumps(tool_input, default=str)
 
         cursor = conn.execute(
@@ -312,7 +312,7 @@ def track_file_change(
         conn = _get_connection(str(db_file))
         _ensure_schema(conn)
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         cursor = conn.execute(
             """INSERT INTO file_changes

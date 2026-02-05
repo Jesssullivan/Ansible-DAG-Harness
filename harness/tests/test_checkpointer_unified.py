@@ -9,9 +9,7 @@ Tests cover:
 - Graceful degradation when StateDB sync fails
 """
 
-import asyncio
 from datetime import UTC, datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,7 +21,6 @@ from harness.dag.checkpointer_unified import (
     create_unified_checkpointer,
 )
 from harness.db.state import StateDB
-
 
 # =============================================================================
 # FIXTURES
@@ -182,9 +179,7 @@ class TestCheckpointerWithStateDB:
         sample_metadata,
     ):
         """put should delegate to inner and sync to StateDB."""
-        unified_checkpointer.put(
-            sample_config, sample_checkpoint, sample_metadata, {}
-        )
+        unified_checkpointer.put(sample_config, sample_checkpoint, sample_metadata, {})
 
         # Should call inner checkpointer
         mock_inner_checkpointer.put.assert_called_once()
@@ -204,9 +199,7 @@ class TestCheckpointerWithStateDB:
         sample_metadata,
     ):
         """aput should delegate to inner and sync to StateDB."""
-        await unified_checkpointer.aput(
-            sample_config, sample_checkpoint, sample_metadata, {}
-        )
+        await unified_checkpointer.aput(sample_config, sample_checkpoint, sample_metadata, {})
 
         # Should call inner checkpointer
         mock_inner_checkpointer.aput.assert_called_once()
@@ -245,9 +238,7 @@ class TestCheckpointerWithStateDB:
         """put_writes should delegate to inner checkpointer."""
         writes = [("channel", "value")]
         unified_checkpointer.put_writes(sample_config, writes, "task-1")
-        mock_inner_checkpointer.put_writes.assert_called_once_with(
-            sample_config, writes, "task-1"
-        )
+        mock_inner_checkpointer.put_writes.assert_called_once_with(sample_config, writes, "task-1")
 
 
 # =============================================================================
@@ -387,9 +378,7 @@ class TestStateDBSync:
         """Sync should build proper checkpoint data structure."""
         config = {"configurable": {"thread_id": "123"}}
 
-        unified_checkpointer._sync_to_statedb_impl(
-            config, sample_checkpoint, sample_metadata
-        )
+        unified_checkpointer._sync_to_statedb_impl(config, sample_checkpoint, sample_metadata)
 
         # Verify checkpoint_execution was called with correct structure
         mock_statedb.checkpoint_execution.assert_called_once()
@@ -411,9 +400,7 @@ class TestStateDBSync:
         """Sync should skip if execution_id cannot be extracted."""
         config = {"configurable": {"thread_id": "non-numeric"}}
 
-        unified_checkpointer._sync_to_statedb_impl(
-            config, sample_checkpoint, sample_metadata
-        )
+        unified_checkpointer._sync_to_statedb_impl(config, sample_checkpoint, sample_metadata)
 
         # Should not call checkpoint_execution
         mock_statedb.checkpoint_execution.assert_not_called()
@@ -427,9 +414,7 @@ class TestStateDBSync:
         mock_statedb.checkpoint_execution.side_effect = Exception("DB error")
 
         # Should not raise
-        unified_checkpointer._sync_to_statedb_impl(
-            config, sample_checkpoint, sample_metadata
-        )
+        unified_checkpointer._sync_to_statedb_impl(config, sample_checkpoint, sample_metadata)
 
 
 # =============================================================================

@@ -452,9 +452,7 @@ class MCPInstaller:
                 dest.write_text(content, encoding="utf-8")
                 # Make executable
                 dest.chmod(dest.stat().st_mode | 0o111)
-                results.append(
-                    ComponentStatus(name=f"hook:{hook_name}", installed=True, path=dest)
-                )
+                results.append(ComponentStatus(name=f"hook:{hook_name}", installed=True, path=dest))
 
             except FileNotFoundError:
                 results.append(

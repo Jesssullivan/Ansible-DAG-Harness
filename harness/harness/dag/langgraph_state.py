@@ -15,7 +15,6 @@ from typing import Annotated, Any, TypedDict
 from harness.db.models import TestType
 from harness.db.state import StateDB
 
-
 # =============================================================================
 # CUSTOM REDUCERS
 # =============================================================================

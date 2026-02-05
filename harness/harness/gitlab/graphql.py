@@ -394,9 +394,7 @@ class GitLabGraphQLClient:
                 )
                 return True
 
-            logger.warning(
-                f"Issue #{issue_iid} iteration assignment returned no iteration data"
-            )
+            logger.warning(f"Issue #{issue_iid} iteration assignment returned no iteration data")
             return False
 
         except GitLabGraphQLError as e:

@@ -58,7 +58,6 @@ from harness.dag.langgraph_engine import (
 from harness.db.models import Role
 from harness.db.state import StateDB
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
@@ -875,7 +874,9 @@ class TestCreateIssueNode:
             mock_api = AsyncMock()
             mock_api.get_current_iteration = AsyncMock(return_value=None)
             mock_api.ensure_label_exists = AsyncMock()
-            mock_api.get_or_create_issue = AsyncMock(return_value=(mock_issue, False))  # Not created
+            mock_api.get_or_create_issue = AsyncMock(
+                return_value=(mock_issue, False)
+            )  # Not created
 
             # Configure context manager
             mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_api)
@@ -1487,7 +1488,6 @@ class TestAnalyzeDepsNodeExtended:
         assert role is not None
 
         # Mock direct query results - transitive deps have depth > 1
-        original_get_deps = mock_db.get_dependencies
 
         def mock_get_deps(role_name, transitive=False):
             if not transitive:
@@ -1516,7 +1516,6 @@ class TestAnalyzeDepsNodeExtended:
         )
 
         # Simulate a database error that could occur with circular dependency detection
-        original_get_deps = mock_db.get_dependencies
         mock_db.get_dependencies = MagicMock(
             side_effect=Exception("Circular dependency detected: circ_role -> A -> circ_role")
         )
@@ -1700,7 +1699,6 @@ class TestCreateCommitNodeExtended:
     async def test_commit_message_format_contains_wave(self, tmp_path):
         """Edge case: verify commit message includes role name and wave info."""
         with patch("subprocess.run") as mock_run:
-
             captured_commit_msg = {}
 
             def run_side_effect(cmd, **kwargs):
@@ -1799,7 +1797,9 @@ class TestCreateIssueNodeExtended:
             mock_api = AsyncMock()
             mock_api.get_current_iteration = AsyncMock(return_value=None)
             mock_api.ensure_label_exists = AsyncMock()
-            mock_api.get_or_create_issue = AsyncMock(side_effect=ValueError("Role 'x' not found in DB"))
+            mock_api.get_or_create_issue = AsyncMock(
+                side_effect=ValueError("Role 'x' not found in DB")
+            )
 
             # Configure context manager
             mock_api_class.return_value.__aenter__ = AsyncMock(return_value=mock_api)
@@ -1864,7 +1864,7 @@ class TestCreateMRNodeExtended:
                 "wave": 1,
                 "wave_name": "Infrastructure",
             }
-            result = await create_mr_node(state)
+            await create_mr_node(state)
 
             # Verify render_mr_description was called with issue_iid in context
             call_args = mock_render.call_args[0][0]
@@ -2011,9 +2011,7 @@ class TestAddToMergeTrainNodeExtended:
             mock_client.is_merge_train_available.return_value = {"available": True}
             mock_client.is_merge_train_enabled.return_value = True
             # add_to_merge_train fails with a "not found" error -> triggers fallback
-            mock_client.add_to_merge_train.side_effect = RuntimeError(
-                "merge_train API not found"
-            )
+            mock_client.add_to_merge_train.side_effect = RuntimeError("merge_train API not found")
             mock_client.merge_when_pipeline_succeeds.return_value = None
             mock_client_class.return_value = mock_client
 

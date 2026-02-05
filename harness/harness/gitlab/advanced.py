@@ -12,7 +12,6 @@ Provides:
 import asyncio
 import json
 import logging
-import subprocess
 import urllib.parse
 from dataclasses import dataclass
 from typing import Any
@@ -297,9 +296,7 @@ class GitLabAsyncBase:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=self.config.timeout
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self.config.timeout)
 
             if proc.returncode != 0:
                 raise RuntimeError(f"glab command failed: {stderr.decode()}")
@@ -309,7 +306,7 @@ class GitLabAsyncBase:
                 return json.loads(output)
             return output
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise RuntimeError(f"glab command timed out after {self.config.timeout}s")
 
     async def _api_get(self, endpoint: str) -> dict[str, Any] | list:
@@ -332,9 +329,7 @@ class GitLabAsyncBase:
 
         return await self._run_glab("api", endpoint, "--method", "PUT", *field_args)
 
-    async def _graphql(
-        self, query: str, variables: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    async def _graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Execute a GraphQL query against GitLab API.
 
@@ -371,9 +366,7 @@ class GitLabAsyncBase:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=self.config.timeout
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self.config.timeout)
 
             if proc.returncode != 0:
                 raise RuntimeError(f"GraphQL query failed: {stderr.decode()}")
@@ -385,7 +378,7 @@ class GitLabAsyncBase:
 
             return result.get("data", {})
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise RuntimeError(f"GraphQL query timed out after {self.config.timeout}s")
 
 
@@ -445,9 +438,7 @@ class GitLabProjectManager(GitLabAsyncBase):
         encoded = encode_project_path(project_path)
         return await self._api_get(f"projects/{encoded}/members/all")
 
-    async def get_merge_request_approvals(
-        self, project_path: str, mr_iid: int
-    ) -> dict:
+    async def get_merge_request_approvals(self, project_path: str, mr_iid: int) -> dict:
         """
         Get merge request approval status and rules.
 
@@ -497,9 +488,7 @@ class GitLabIterationManager(GitLabAsyncBase):
     Supports iteration cadences for automated iteration creation.
     """
 
-    async def list_iterations(
-        self, group_path: str, state: str = "current"
-    ) -> list[dict]:
+    async def list_iterations(self, group_path: str, state: str = "current") -> list[dict]:
         """
         List iterations for a group.
 
@@ -518,9 +507,7 @@ class GitLabIterationManager(GitLabAsyncBase):
         encoded = encode_project_path(group_path)
         return await self._api_get(f"groups/{encoded}/iterations?state={state}")
 
-    async def get_iteration_by_title(
-        self, group_path: str, title: str
-    ) -> dict | None:
+    async def get_iteration_by_title(self, group_path: str, title: str) -> dict | None:
         """
         Find an iteration by its title.
 
@@ -608,11 +595,7 @@ class GitLabIterationManager(GitLabAsyncBase):
                 {"groupPath": group_path},
             )
 
-            cadences = (
-                result.get("group", {})
-                .get("iterationCadences", {})
-                .get("nodes", [])
-            )
+            cadences = result.get("group", {}).get("iterationCadences", {}).get("nodes", [])
 
             # Return first active cadence
             for cadence in cadences:
@@ -639,9 +622,7 @@ class GitLabMergeTrainManager(GitLabAsyncBase):
     merged sequentially with passing pipelines.
     """
 
-    async def get_merge_train(
-        self, project_path: str, target_branch: str = "main"
-    ) -> list[dict]:
+    async def get_merge_train(self, project_path: str, target_branch: str = "main") -> list[dict]:
         """
         Get the current merge train queue for a target branch.
 
@@ -658,13 +639,9 @@ class GitLabMergeTrainManager(GitLabAsyncBase):
             - target_branch: Target branch
         """
         encoded = encode_project_path(project_path)
-        return await self._api_get(
-            f"projects/{encoded}/merge_trains?target_branch={target_branch}"
-        )
+        return await self._api_get(f"projects/{encoded}/merge_trains?target_branch={target_branch}")
 
-    async def get_mr_position_in_train(
-        self, project_path: str, mr_iid: int
-    ) -> int | None:
+    async def get_mr_position_in_train(self, project_path: str, mr_iid: int) -> int | None:
         """
         Get the position of an MR in the merge train queue.
 
@@ -724,9 +701,7 @@ class GitLabMergeTrainManager(GitLabAsyncBase):
             logger.error(f"Failed to add MR !{mr_iid} to merge train: {e}")
             return False
 
-    async def get_merge_train_eta(
-        self, project_path: str, mr_iid: int
-    ) -> int | None:
+    async def get_merge_train_eta(self, project_path: str, mr_iid: int) -> int | None:
         """
         Estimate time until MR will be merged from merge train.
 

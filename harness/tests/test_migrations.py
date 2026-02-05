@@ -11,13 +11,11 @@ Covers:
 """
 
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import pytest
 
-from harness.db.migrations import Migration, MigrationRunner
-
+from harness.db.migrations import MigrationRunner
 
 # =============================================================================
 # FIXTURES
@@ -52,9 +50,7 @@ def _get_views(db_path: str) -> set[str]:
     """Helper to get all view names in a database."""
     conn = sqlite3.connect(db_path)
     try:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='view'"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='view'").fetchall()
         return {row[0] for row in rows}
     finally:
         conn.close()
@@ -76,9 +72,7 @@ def _get_triggers(db_path: str) -> set[str]:
     """Helper to get all trigger names in a database."""
     conn = sqlite3.connect(db_path)
     try:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='trigger'"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'").fetchall()
         return {row[0] for row in rows}
     finally:
         conn.close()
@@ -605,9 +599,7 @@ class TestDataPreservation:
 
         # Insert test data
         conn = sqlite3.connect(db_path)
-        conn.execute(
-            "INSERT INTO roles (name, wave) VALUES ('test_role', 1)"
-        )
+        conn.execute("INSERT INTO roles (name, wave) VALUES ('test_role', 1)")
         conn.commit()
         conn.close()
 
@@ -653,7 +645,7 @@ class TestEdgeCases:
 
     def test_schema_migrations_table_created_on_init(self, db_path: str):
         """schema_migrations table is created when MigrationRunner initializes."""
-        runner = MigrationRunner(db_path)
+        MigrationRunner(db_path)
         tables = _get_tables(db_path)
         assert "schema_migrations" in tables
 

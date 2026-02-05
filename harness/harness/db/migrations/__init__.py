@@ -22,7 +22,6 @@ import pkgutil
 import sqlite3
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -110,11 +109,7 @@ def _discover_migrations() -> list[Migration]:
         # Find Migration subclasses in the module
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
-            if (
-                isinstance(attr, type)
-                and issubclass(attr, Migration)
-                and attr is not Migration
-            ):
+            if isinstance(attr, type) and issubclass(attr, Migration) and attr is not Migration:
                 instance = attr()
                 migrations.append(instance)
 
@@ -173,9 +168,7 @@ class MigrationRunner:
         """
         conn = self._get_connection()
         try:
-            row = conn.execute(
-                "SELECT MAX(version) as version FROM schema_migrations"
-            ).fetchone()
+            row = conn.execute("SELECT MAX(version) as version FROM schema_migrations").fetchone()
             return row["version"] if row and row["version"] is not None else 0
         finally:
             conn.close()
@@ -184,9 +177,7 @@ class MigrationRunner:
         """Get the set of all applied migration versions."""
         conn = self._get_connection()
         try:
-            rows = conn.execute(
-                "SELECT version FROM schema_migrations ORDER BY version"
-            ).fetchall()
+            rows = conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
             return {row["version"] for row in rows}
         finally:
             conn.close()
@@ -241,12 +232,8 @@ class MigrationRunner:
                     )
                 except Exception as e:
                     conn.rollback()
-                    logger.error(
-                        "Migration %d failed: %s", migration.version, e
-                    )
-                    raise RuntimeError(
-                        f"Migration {migration.version} failed: {e}"
-                    ) from e
+                    logger.error("Migration %d failed: %s", migration.version, e)
+                    raise RuntimeError(f"Migration {migration.version} failed: {e}") from e
         finally:
             conn.close()
 

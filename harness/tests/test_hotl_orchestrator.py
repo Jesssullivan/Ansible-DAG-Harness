@@ -1,7 +1,7 @@
 """Tests for HOTL orchestrator."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -78,9 +78,7 @@ class TestStartProcessesQueue:
         # All wave 1 roles should be completed
         queue = orchestrator.queue
         assert queue.is_complete()
-        completed = [
-            i for i in queue.items if i.status == QueueItemStatus.COMPLETED
-        ]
+        completed = [i for i in queue.items if i.status == QueueItemStatus.COMPLETED]
         assert len(completed) == 2  # common, windows_prerequisites
 
     @pytest.mark.asyncio
@@ -121,9 +119,7 @@ class TestStopGraceful:
             return_value=mock_graph,
         ):
             # Start in background
-            task = asyncio.create_task(
-                orchestrator.start(waves=[1], max_concurrent=1)
-            )
+            task = asyncio.create_task(orchestrator.start(waves=[1], max_concurrent=1))
 
             # Give it time to start processing
             await asyncio.sleep(0.02)
@@ -188,14 +184,10 @@ class TestApproveResumes:
                         await orchestrator.approve("common", approved=True)
                         return
 
-            task = asyncio.create_task(
-                orchestrator.start(max_concurrent=1)
-            )
+            task = asyncio.create_task(orchestrator.start(max_concurrent=1))
             approve_task = asyncio.create_task(approve_after_pause())
 
-            await asyncio.wait_for(
-                asyncio.gather(task, approve_task), timeout=10.0
-            )
+            await asyncio.wait_for(asyncio.gather(task, approve_task), timeout=10.0)
 
         assert queue.is_complete()
 

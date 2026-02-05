@@ -18,10 +18,10 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Iterator, Sequence
+from typing import TYPE_CHECKING, Any
 
 from langgraph.checkpoint.base import (
     BaseCheckpointSaver,

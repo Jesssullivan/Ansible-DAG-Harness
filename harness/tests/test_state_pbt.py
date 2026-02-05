@@ -13,16 +13,13 @@ Test Categories:
 """
 
 import json
-from datetime import datetime
 
 import pytest
-from hypothesis import assume, given, settings, Verbosity, HealthCheck
+from hypothesis import HealthCheck, Verbosity, assume, given, settings
 
 from harness.db.models import (
     Credential,
-    CyclicDependencyError,
     DependencyType,
-    NodeStatus,
     Role,
     RoleDependency,
     WorkflowStatus,
@@ -38,13 +35,11 @@ from tests.strategies import (
     deployment_order_strategy,
     role_dependency_chain_strategy,
     role_diamond_dependency_strategy,
-    role_name_strategy,
     role_strategy,
     state_transition_sequence_strategy,
     wave_strategy,
     workflow_state_transition_strategy,
 )
-
 
 # =============================================================================
 # 1. TRANSITIVITY PROPERTY TESTS
@@ -503,7 +498,10 @@ class TestCheckpointConsistency:
         # Check nested state_summary
         assert loaded["state_summary"]["role_name"] == metadata["state_summary"]["role_name"]
         assert loaded["state_summary"]["current_node"] == metadata["state_summary"]["current_node"]
-        assert loaded["state_summary"]["completed_nodes"] == metadata["state_summary"]["completed_nodes"]
+        assert (
+            loaded["state_summary"]["completed_nodes"]
+            == metadata["state_summary"]["completed_nodes"]
+        )
         assert loaded["state_summary"]["errors"] == metadata["state_summary"]["errors"]
 
     @pytest.mark.pbt
@@ -519,10 +517,10 @@ class TestCheckpointConsistency:
 
         # Create prerequisite data
         db.upsert_role(Role(name="test_role", wave=1))
-        role = db.get_role("test_role")
+        db.get_role("test_role")
 
         # Create workflow definition first
-        workflow_id = db.create_workflow_definition(
+        db.create_workflow_definition(
             name="test-workflow",
             description="Test workflow",
             nodes=[{"id": "start"}, {"id": "end"}],

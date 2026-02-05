@@ -9,7 +9,6 @@ import yaml
 from typer.testing import CliRunner
 
 from harness.bootstrap.init import (
-    GITIGNORE_ENTRIES,
     _detect_git_root,
     _scan_roles,
     _update_gitignore,

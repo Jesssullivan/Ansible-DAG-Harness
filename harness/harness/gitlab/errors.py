@@ -5,7 +5,10 @@ This module provides a comprehensive exception hierarchy for GitLab API errors,
 enabling proper error handling, retry logic, and debugging.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import httpx
 
 
 class GitLabAPIError(Exception):
@@ -186,7 +189,6 @@ def parse_gitlab_error(response: "httpx.Response") -> GitLabAPIError:
         >>> isinstance(error, GitLabNotFoundError)
         True
     """
-    import httpx  # Import here to avoid circular imports
 
     status_code = response.status_code
 
@@ -195,7 +197,9 @@ def parse_gitlab_error(response: "httpx.Response") -> GitLabAPIError:
         response_body = response.json()
         # GitLab typically returns errors in "message" or "error" fields
         if isinstance(response_body, dict):
-            message = response_body.get("message") or response_body.get("error") or str(response_body)
+            message = (
+                response_body.get("message") or response_body.get("error") or str(response_body)
+            )
         else:
             message = str(response_body)
     except Exception:

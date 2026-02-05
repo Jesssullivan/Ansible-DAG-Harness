@@ -9,28 +9,23 @@ Tests verify that the system handles various failure scenarios gracefully:
 """
 
 import json
-import os
 import signal
 import sqlite3
 import subprocess
 import threading
-import time
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
 from harness.dag.langgraph_engine import (
-    BoxUpRoleState,
     create_box_up_role_graph,
     create_initial_state,
     set_module_db,
 )
 from harness.dag.store import HarnessStore
-from harness.db.models import Role, WorkflowStatus
+from harness.db.models import Role
 from harness.db.state import StateDB
-
 
 # =============================================================================
 # FIXTURES
@@ -158,9 +153,7 @@ class TestNetworkFailures:
         """Simulate DNS failure for GitLab host."""
         with patch("httpx.Client") as mock_client_class:
             mock_client = MagicMock()
-            mock_client.get.side_effect = httpx.ConnectError(
-                "Name or service not known"
-            )
+            mock_client.get.side_effect = httpx.ConnectError("Name or service not known")
             mock_client_class.return_value = mock_client
 
             client = httpx.Client()
@@ -249,9 +242,7 @@ class TestDatabaseFailures:
             nonlocal success_count
             try:
                 thread_db = StateDB(db_path)
-                thread_db.upsert_role(
-                    Role(name=f"role_{i}", wave=i % 5)
-                )
+                thread_db.upsert_role(Role(name=f"role_{i}", wave=i % 5))
                 with lock:
                     success_count += 1
             except Exception as e:
@@ -396,9 +387,7 @@ class TestGracefulDegradation:
         """Notification failure should not block workflow."""
         with patch("httpx.Client") as mock_client_class:
             mock_client = MagicMock()
-            mock_client.post.side_effect = httpx.ConnectError(
-                "Connection refused"
-            )
+            mock_client.post.side_effect = httpx.ConnectError("Connection refused")
             mock_client_class.return_value = mock_client
 
             # Notification failure should be catchable and non-fatal
@@ -427,10 +416,12 @@ class TestGracefulDegradation:
             # Second call: MWPS fallback succeeds
             mwps_success = MagicMock()
             mwps_success.returncode = 0
-            mwps_success.stdout = json.dumps({
-                "merge_when_pipeline_succeeds": True,
-                "iid": 456,
-            })
+            mwps_success.stdout = json.dumps(
+                {
+                    "merge_when_pipeline_succeeds": True,
+                    "iid": 456,
+                }
+            )
             mwps_success.stderr = ""
 
             mock_run.side_effect = [merge_train_fail, mwps_success]

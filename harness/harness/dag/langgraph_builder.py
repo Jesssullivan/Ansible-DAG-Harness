@@ -71,7 +71,6 @@ def _route_after_worktree_with_recovery(state: BoxUpRoleState):
         - "notify_failure" if errors or max retries exceeded
         - List[Send] for parallel test execution on success
     """
-    from langgraph.types import Send
 
     from harness.dag.recovery_config import get_recovery_config
 
@@ -206,8 +205,7 @@ def create_box_up_role_graph(
     graph.add_conditional_edges(
         "recovery",
         route_after_recovery,
-        ["create_worktree", "validate_deploy", "run_molecule", "run_pytest",
-         "notify_failure"],
+        ["create_worktree", "validate_deploy", "run_molecule", "run_pytest", "notify_failure"],
     )
 
     if parallel_tests:
@@ -219,8 +217,14 @@ def create_box_up_role_graph(
         graph.add_conditional_edges(
             "create_worktree",
             _route_after_worktree_with_recovery,
-            ["run_molecule", "run_pytest", "merge_test_results", "create_worktree",
-             "recovery", "notify_failure"],
+            [
+                "run_molecule",
+                "run_pytest",
+                "merge_test_results",
+                "create_worktree",
+                "recovery",
+                "notify_failure",
+            ],
         )
 
         # Both parallel test nodes converge at merge_test_results

@@ -1,7 +1,6 @@
 """Tests for Pydantic configuration validation models."""
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -11,12 +10,11 @@ from pydantic import ValidationError
 from harness.config import (
     CheckpointerConfig,
     GitLabConfigModel,
-    HOTLConfig,
     HarnessConfigModel,
+    HOTLConfig,
     WaveDefinition,
     _interpolate_env_vars,
 )
-
 
 # ============================================================================
 # FIXTURES

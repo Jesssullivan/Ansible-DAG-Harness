@@ -560,15 +560,11 @@ def checkpoint_metadata_strategy(draw):
         "state_summary": {
             "role_name": draw(role_name_strategy),
             "current_node": draw(
-                st.sampled_from(
-                    ["start", "validate", "analyze", "test", "commit", "mr", "end"]
-                )
+                st.sampled_from(["start", "validate", "analyze", "test", "commit", "mr", "end"])
             ),
             "completed_nodes": draw(
                 st.lists(
-                    st.sampled_from(
-                        ["start", "validate", "analyze", "test", "commit", "mr"]
-                    ),
+                    st.sampled_from(["start", "validate", "analyze", "test", "commit", "mr"]),
                     max_size=6,
                     unique=True,
                 )

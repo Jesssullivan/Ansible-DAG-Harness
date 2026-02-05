@@ -17,7 +17,6 @@ Four scenarios are covered:
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -26,14 +25,12 @@ import pytest
 from harness.dag.langgraph_engine import (
     BoxUpRoleState,
     Command,
-    LangGraphWorkflowRunner,
     create_box_up_role_graph,
     create_initial_state,
     set_module_db,
 )
-from harness.db.models import Role, WorkflowStatus
+from harness.db.models import Role
 from harness.db.state import StateDB
-
 
 # ============================================================================
 # HELPERS
@@ -68,6 +65,7 @@ def _patch_all_externals(role_name: str, tmp_path: Path, *, auto_approve: bool =
         rn = state["role_name"]
         rp = tmp_path / "ansible" / "roles" / rn
         import os
+
         if not os.path.isdir(str(rp)):
             return {
                 "errors": [f"Role not found: {rn}"],
@@ -87,12 +85,11 @@ def _patch_all_externals(role_name: str, tmp_path: Path, *, auto_approve: bool =
     )
 
     # -- Test result recording (no-op for E2E) ---------------------------
-    stack.enter_context(
-        patch("harness.dag.langgraph_nodes._record_test_result")
-    )
+    stack.enter_context(patch("harness.dag.langgraph_nodes._record_test_result"))
 
     # -- Human approval auto-approve -------------------------------------
     if auto_approve:
+
         async def _auto_approve_node(state: BoxUpRoleState) -> dict:
             return {
                 "human_approved": True,
@@ -150,12 +147,12 @@ def _patch_all_externals(role_name: str, tmp_path: Path, *, auto_approve: bool =
     mock_client = MagicMock()
     mock_issue = MagicMock()
     mock_issue.iid = 42
-    mock_issue.web_url = f"https://gitlab.example.com/project/-/issues/42"
+    mock_issue.web_url = "https://gitlab.example.com/project/-/issues/42"
     mock_client.get_or_create_issue.return_value = (mock_issue, True)
 
     mock_mr = MagicMock()
     mock_mr.iid = 99
-    mock_mr.web_url = f"https://gitlab.example.com/project/-/merge_requests/99"
+    mock_mr.web_url = "https://gitlab.example.com/project/-/merge_requests/99"
     mock_client.get_or_create_mr.return_value = (mock_mr, True)
 
     mock_client.is_merge_train_available.return_value = {"available": True}
@@ -171,9 +168,7 @@ def _patch_all_externals(role_name: str, tmp_path: Path, *, auto_approve: bool =
     mock_client.remote_branch_exists.return_value = False
     mock_client.update_issue_on_failure.return_value = True
 
-    stack.enter_context(
-        patch("harness.gitlab.api.GitLabClient", return_value=mock_client)
-    )
+    stack.enter_context(patch("harness.gitlab.api.GitLabClient", return_value=mock_client))
 
     # -- Notifications (no-op) -------------------------------------------
     stack.enter_context(
@@ -236,9 +231,7 @@ class TestBoxUpWorkflowE2E:
                 enable_breakpoints=False,
             )
 
-            async with AsyncSqliteSaver.from_conn_string(
-                str(tmp_path / "cp.db")
-            ) as checkpointer:
+            async with AsyncSqliteSaver.from_conn_string(str(tmp_path / "cp.db")) as checkpointer:
                 compiled = graph_def.compile(checkpointer=checkpointer)
 
                 initial = create_initial_state(unique_role_name)
@@ -294,9 +287,7 @@ class TestBoxUpWorkflowE2E:
 
         # Register in DB so execution creation succeeds, but do NOT create
         # the role directory -- validate_role_node checks the filesystem.
-        e2e_db.upsert_role(
-            Role(name=nonexistent_role, wave=0, has_molecule_tests=False)
-        )
+        e2e_db.upsert_role(Role(name=nonexistent_role, wave=0, has_molecule_tests=False))
 
         # Patch only notifications (we want real validate_role_node to fail)
         with (
@@ -323,9 +314,7 @@ class TestBoxUpWorkflowE2E:
                 enable_breakpoints=False,
             )
 
-            async with AsyncSqliteSaver.from_conn_string(
-                str(tmp_path / "cp.db")
-            ) as checkpointer:
+            async with AsyncSqliteSaver.from_conn_string(str(tmp_path / "cp.db")) as checkpointer:
                 compiled = graph_def.compile(checkpointer=checkpointer)
 
                 initial = create_initial_state(nonexistent_role)
@@ -385,9 +374,7 @@ class TestBoxUpWorkflowE2E:
                 enable_breakpoints=False,
             )
 
-            async with AsyncSqliteSaver.from_conn_string(
-                str(tmp_path / "cp.db")
-            ) as checkpointer:
+            async with AsyncSqliteSaver.from_conn_string(str(tmp_path / "cp.db")) as checkpointer:
                 compiled = graph_def.compile(checkpointer=checkpointer)
 
                 # --- First run ---
@@ -450,9 +437,7 @@ class TestBoxUpWorkflowE2E:
         )
 
         # auto_approve=False keeps the real human_approval_node with interrupt()
-        stack, mock_gl = _patch_all_externals(
-            unique_role_name, tmp_path, auto_approve=False
-        )
+        stack, mock_gl = _patch_all_externals(unique_role_name, tmp_path, auto_approve=False)
 
         with stack:
             set_module_db(e2e_db)
@@ -465,9 +450,7 @@ class TestBoxUpWorkflowE2E:
                 enable_breakpoints=False,
             )
 
-            async with AsyncSqliteSaver.from_conn_string(
-                str(tmp_path / "cp.db")
-            ) as checkpointer:
+            async with AsyncSqliteSaver.from_conn_string(str(tmp_path / "cp.db")) as checkpointer:
                 compiled = graph_def.compile(checkpointer=checkpointer)
 
                 thread_id = f"e2e-resume-{unique_role_name}"

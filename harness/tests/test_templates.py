@@ -1,7 +1,5 @@
 """Tests for GitLab MR template rendering."""
 
-import pytest
-
 
 class TestRenderMrDescription:
     """Tests for render_mr_description function."""

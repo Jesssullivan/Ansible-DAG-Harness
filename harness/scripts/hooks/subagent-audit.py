@@ -212,8 +212,7 @@ class SubagentAuditScript:
 
         self.audit_logger.log(entry)
         logger.info(
-            f"Logged subagent stop: {agent_id[:8]} "
-            f"(status={status}, duration={duration_ms}ms)"
+            f"Logged subagent stop: {agent_id[:8]} " f"(status={status}, duration={duration_ms}ms)"
         )
 
     def get_entries(

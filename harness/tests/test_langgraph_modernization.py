@@ -14,9 +14,8 @@ with the harness infrastructure.
 """
 
 import os
-from datetime import datetime, UTC
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -30,6 +29,7 @@ try:
         CheckpointVersion,
         UnifiedCheckpointerContext,
     )
+
     HAS_CHECKPOINTER_UNIFIED = True
 except ImportError:
     HAS_CHECKPOINTER_UNIFIED = False
@@ -39,6 +39,7 @@ except ImportError:
 
 try:
     from harness.dag.store import HarnessStore, create_harness_store
+
     HAS_STORE = True
 except ImportError:
     HAS_STORE = False
@@ -47,14 +48,15 @@ except ImportError:
 
 try:
     from harness.dag.langgraph_engine import (
+        BREAKPOINTS_ENV_VAR,
+        DEFAULT_BREAKPOINTS,
         BoxUpRoleState,
-        keep_last_n,
         create_box_up_role_graph,
         create_initial_state,
-        DEFAULT_BREAKPOINTS,
-        BREAKPOINTS_ENV_VAR,
         get_breakpoints_enabled,
+        keep_last_n,
     )
+
     HAS_LANGGRAPH_ENGINE = True
 except ImportError:
     HAS_LANGGRAPH_ENGINE = False
@@ -68,11 +70,12 @@ except ImportError:
 
 try:
     from harness.dag.commands import (
-        create_approval_command,
-        create_skip_command,
         ApprovalPayload,
         SkipPayload,
+        create_approval_command,
+        create_skip_command,
     )
+
     HAS_COMMANDS = True
 except ImportError:
     HAS_COMMANDS = False
@@ -83,6 +86,7 @@ except ImportError:
 
 try:
     from langgraph.types import Command, Send
+
     HAS_LANGGRAPH_TYPES = True
 except ImportError:
     HAS_LANGGRAPH_TYPES = False
@@ -154,13 +158,20 @@ def sample_metadata():
 # =============================================================================
 
 
-@pytest.mark.skipif(not HAS_CHECKPOINTER_UNIFIED, reason="checkpointer_unified module not available")
+@pytest.mark.skipif(
+    not HAS_CHECKPOINTER_UNIFIED, reason="checkpointer_unified module not available"
+)
 class TestCheckpointerWithStateDBSync:
     """Test that unified checkpointer syncs to StateDB correctly."""
 
     @pytest.mark.unit
     def test_sync_on_put(
-        self, in_memory_db, mock_inner_checkpointer, sample_checkpoint, sample_config, sample_metadata
+        self,
+        in_memory_db,
+        mock_inner_checkpointer,
+        sample_checkpoint,
+        sample_config,
+        sample_metadata,
     ):
         """Put operation should sync checkpoint data to StateDB."""
         checkpointer = CheckpointerWithStateDB(
@@ -184,7 +195,12 @@ class TestCheckpointerWithStateDBSync:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_async_sync_on_aput(
-        self, in_memory_db, mock_inner_checkpointer, sample_checkpoint, sample_config, sample_metadata
+        self,
+        in_memory_db,
+        mock_inner_checkpointer,
+        sample_checkpoint,
+        sample_config,
+        sample_metadata,
     ):
         """Async put operation should sync checkpoint data to StateDB."""
         checkpointer = CheckpointerWithStateDB(
@@ -201,7 +217,12 @@ class TestCheckpointerWithStateDBSync:
 
     @pytest.mark.unit
     def test_no_sync_when_disabled(
-        self, in_memory_db, mock_inner_checkpointer, sample_checkpoint, sample_config, sample_metadata
+        self,
+        in_memory_db,
+        mock_inner_checkpointer,
+        sample_checkpoint,
+        sample_config,
+        sample_metadata,
     ):
         """Should not sync to StateDB when sync_to_statedb=False."""
         checkpointer = CheckpointerWithStateDB(
@@ -234,10 +255,16 @@ class TestCheckpointerWithStateDBSync:
         assert checkpointer._extract_execution_id({"configurable": {"thread_id": "456"}}) == 456
 
         # Test execution-N format
-        assert checkpointer._extract_execution_id({"configurable": {"thread_id": "execution-789"}}) == 789
+        assert (
+            checkpointer._extract_execution_id({"configurable": {"thread_id": "execution-789"}})
+            == 789
+        )
 
         # Test non-numeric format returns None
-        assert checkpointer._extract_execution_id({"configurable": {"thread_id": "role-common"}}) is None
+        assert (
+            checkpointer._extract_execution_id({"configurable": {"thread_id": "role-common"}})
+            is None
+        )
 
         # Test missing thread_id returns None
         assert checkpointer._extract_execution_id({}) is None
@@ -245,7 +272,12 @@ class TestCheckpointerWithStateDBSync:
 
     @pytest.mark.unit
     def test_graceful_degradation_on_statedb_error(
-        self, in_memory_db, mock_inner_checkpointer, sample_checkpoint, sample_config, sample_metadata
+        self,
+        in_memory_db,
+        mock_inner_checkpointer,
+        sample_checkpoint,
+        sample_config,
+        sample_metadata,
     ):
         """Should not fail if StateDB sync fails - inner checkpoint is source of truth."""
         checkpointer = CheckpointerWithStateDB(
@@ -280,11 +312,15 @@ class TestStoreCrossThreadMemory:
 
         # Thread 1: Store execution state
         thread1_namespace = ("workflows", "box-up-role", "thread-1")
-        store.put(thread1_namespace, "state", {
-            "role_name": "common",
-            "molecule_passed": True,
-            "completed_at": datetime.now(UTC).isoformat(),
-        })
+        store.put(
+            thread1_namespace,
+            "state",
+            {
+                "role_name": "common",
+                "molecule_passed": True,
+                "completed_at": datetime.now(UTC).isoformat(),
+            },
+        )
 
         # Thread 2: Access thread 1's state (simulating cross-thread memory)
         result = store.get(thread1_namespace, "state")
@@ -299,16 +335,24 @@ class TestStoreCrossThreadMemory:
         store = HarnessStore(in_memory_db)
 
         # Store status for multiple roles
-        store.put(("roles", "common"), "last_run", {
-            "execution_id": 123,
-            "passed": True,
-            "timestamp": "2026-02-03T10:00:00Z",
-        })
-        store.put(("roles", "sql_server"), "last_run", {
-            "execution_id": 124,
-            "passed": False,
-            "timestamp": "2026-02-03T11:00:00Z",
-        })
+        store.put(
+            ("roles", "common"),
+            "last_run",
+            {
+                "execution_id": 123,
+                "passed": True,
+                "timestamp": "2026-02-03T10:00:00Z",
+            },
+        )
+        store.put(
+            ("roles", "sql_server"),
+            "last_run",
+            {
+                "execution_id": 124,
+                "passed": False,
+                "timestamp": "2026-02-03T11:00:00Z",
+            },
+        )
 
         # Search for all role statuses
         results = store.search(("roles",))
@@ -324,11 +368,15 @@ class TestStoreCrossThreadMemory:
         store = HarnessStore(in_memory_db)
 
         # Store wave coordination data
-        store.put(("waves", "0"), "status", {
-            "roles_completed": ["common"],
-            "roles_pending": ["windows_prerequisites"],
-            "started_at": "2026-02-03T09:00:00Z",
-        })
+        store.put(
+            ("waves", "0"),
+            "status",
+            {
+                "roles_completed": ["common"],
+                "roles_pending": ["windows_prerequisites"],
+                "started_at": "2026-02-03T09:00:00Z",
+            },
+        )
 
         result = store.get(("waves", "0"), "status")
 
@@ -341,11 +389,15 @@ class TestStoreCrossThreadMemory:
         store = HarnessStore(in_memory_db)
 
         # Store user preferences
-        store.put(("users", "jsullivan2"), "preferences", {
-            "notification_level": "verbose",
-            "parallel_tests": True,
-            "auto_approve_wave_0": False,
-        })
+        store.put(
+            ("users", "jsullivan2"),
+            "preferences",
+            {
+                "notification_level": "verbose",
+                "parallel_tests": True,
+                "auto_approve_wave_0": False,
+            },
+        )
 
         result = store.get(("users", "jsullivan2"), "preferences")
 
@@ -439,7 +491,7 @@ class TestReducerStateMerging:
     def test_state_accumulation_pattern(self):
         """Simulated state updates should accumulate via reducers."""
         # Create initial state
-        state = create_initial_state("common", execution_id=1)
+        create_initial_state("common", execution_id=1)
 
         # Simulate node execution returns that would be merged
         node1_output = {
@@ -647,7 +699,9 @@ class TestCommandResumeApproval:
 # =============================================================================
 
 
-@pytest.mark.skipif(not HAS_LANGGRAPH_TYPES or not HAS_LANGGRAPH_ENGINE, reason="LangGraph types not available")
+@pytest.mark.skipif(
+    not HAS_LANGGRAPH_TYPES or not HAS_LANGGRAPH_ENGINE, reason="LangGraph types not available"
+)
 class TestSendApiParallelExecution:
     """Test parallel test execution with Send API."""
 
@@ -681,7 +735,7 @@ class TestSendApiParallelExecution:
 
         # Get node names from the graph
         # StateGraph stores nodes in _nodes attribute
-        node_names = set(graph.nodes.keys()) if hasattr(graph, 'nodes') else set()
+        set(graph.nodes.keys()) if hasattr(graph, "nodes") else set()
 
         # The graph should have the parallel test nodes
         # Note: Graph structure may vary, so we check if nodes are defined
@@ -713,7 +767,7 @@ class TestSendApiParallelExecution:
 
 @pytest.mark.skipif(
     not all([HAS_CHECKPOINTER_UNIFIED, HAS_STORE, HAS_LANGGRAPH_ENGINE]),
-    reason="Required modules not available"
+    reason="Required modules not available",
 )
 class TestIntegration:
     """Integration tests combining multiple Week 1-2 features."""
@@ -730,10 +784,14 @@ class TestIntegration:
         store = HarnessStore(in_memory_db)
 
         # Store workflow context
-        store.put(("workflows", "box-up-role"), "config", {
-            "parallel_tests": True,
-            "breakpoints_enabled": False,
-        })
+        store.put(
+            ("workflows", "box-up-role"),
+            "config",
+            {
+                "parallel_tests": True,
+                "breakpoints_enabled": False,
+            },
+        )
 
         # Verify both can access DB
         config_result = store.get(("workflows", "box-up-role"), "config")
@@ -857,9 +915,7 @@ class TestEdgeCases:
 
     @pytest.mark.unit
     @pytest.mark.skipif(not HAS_CHECKPOINTER_UNIFIED, reason="checkpointer_unified not available")
-    def test_checkpointer_with_complex_channel_values(
-        self, in_memory_db, mock_inner_checkpointer
-    ):
+    def test_checkpointer_with_complex_channel_values(self, in_memory_db, mock_inner_checkpointer):
         """Checkpointer should handle complex nested channel values."""
         checkpointer = CheckpointerWithStateDB(
             db=in_memory_db,
@@ -871,16 +927,8 @@ class TestEdgeCases:
             "v": 1,
             "id": "test",
             "channel_values": {
-                "nested": {
-                    "deeply": {
-                        "nested": {
-                            "value": [1, 2, {"key": "value"}]
-                        }
-                    }
-                },
-                "list_of_dicts": [
-                    {"a": 1}, {"b": 2}, {"c": 3}
-                ],
+                "nested": {"deeply": {"nested": {"value": [1, 2, {"key": "value"}]}}},
+                "list_of_dicts": [{"a": 1}, {"b": 2}, {"c": 3}],
             },
         }
 

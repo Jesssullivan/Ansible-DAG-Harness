@@ -63,8 +63,7 @@ class TestChangelog:
         """CHANGELOG.md must exist at the repo root."""
         changelog = REPO_ROOT / "CHANGELOG.md"
         assert changelog.exists(), (
-            f"CHANGELOG.md not found at {changelog}. "
-            "Create one following Keep a Changelog format."
+            f"CHANGELOG.md not found at {changelog}. Create one following Keep a Changelog format."
         )
 
     def test_changelog_has_current_version(self):
@@ -102,30 +101,23 @@ class TestCIConfig:
         github_ci = REPO_ROOT / ".github" / "workflows" / "ci.yml"
         gitlab_ci = REPO_ROOT / ".gitlab-ci.yml"
         assert github_ci.exists() or gitlab_ci.exists(), (
-            "No CI configuration found. Expected .github/workflows/ci.yml "
-            "or .gitlab-ci.yml"
+            "No CI configuration found. Expected .github/workflows/ci.yml or .gitlab-ci.yml"
         )
 
     def test_github_ci_exists(self):
         """GitHub Actions CI workflow should exist."""
         ci_yml = REPO_ROOT / ".github" / "workflows" / "ci.yml"
-        assert ci_yml.exists(), (
-            f"GitHub Actions CI workflow not found at {ci_yml}"
-        )
+        assert ci_yml.exists(), f"GitHub Actions CI workflow not found at {ci_yml}"
 
     def test_github_release_exists(self):
         """GitHub Actions release workflow should exist."""
         release_yml = REPO_ROOT / ".github" / "workflows" / "release.yml"
-        assert release_yml.exists(), (
-            f"GitHub Actions release workflow not found at {release_yml}"
-        )
+        assert release_yml.exists(), f"GitHub Actions release workflow not found at {release_yml}"
 
     def test_gitlab_ci_exists(self):
         """GitLab CI config should exist."""
         gitlab_ci = REPO_ROOT / ".gitlab-ci.yml"
-        assert gitlab_ci.exists(), (
-            f"GitLab CI config not found at {gitlab_ci}"
-        )
+        assert gitlab_ci.exists(), f"GitLab CI config not found at {gitlab_ci}"
 
     def test_ci_runs_tests(self):
         """CI config must reference pytest for running tests."""
@@ -141,8 +133,7 @@ class TestCIConfig:
                     break
 
         assert found_pytest, (
-            "No CI config file references pytest. "
-            "CI must run tests as part of the pipeline."
+            "No CI config file references pytest. CI must run tests as part of the pipeline."
         )
 
     def test_ci_runs_linter(self):
@@ -181,9 +172,7 @@ class TestReleaseTooling:
         """pyproject.toml must have a build-system section."""
         pyproject = HARNESS_DIR / "pyproject.toml"
         content = pyproject.read_text()
-        assert "[build-system]" in content, (
-            "pyproject.toml missing [build-system] section"
-        )
+        assert "[build-system]" in content, "pyproject.toml missing [build-system] section"
 
     def test_pyproject_has_version(self):
         """pyproject.toml must have a version field."""

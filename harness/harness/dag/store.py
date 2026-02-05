@@ -34,8 +34,9 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from collections.abc import Iterable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 from langgraph.store.base import (
     BaseStore,
@@ -347,16 +348,12 @@ class HarnessStore(BaseStore):
                     return False
         return True
 
-    def _starts_with(
-        self, namespace: tuple[str, ...], prefix: tuple[str, ...] | list[str]
-    ) -> bool:
+    def _starts_with(self, namespace: tuple[str, ...], prefix: tuple[str, ...] | list[str]) -> bool:
         """Check if namespace starts with prefix."""
         prefix_tuple = tuple(prefix) if isinstance(prefix, list) else prefix
         return namespace[: len(prefix_tuple)] == prefix_tuple
 
-    def _ends_with(
-        self, namespace: tuple[str, ...], suffix: tuple[str, ...] | list[str]
-    ) -> bool:
+    def _ends_with(self, namespace: tuple[str, ...], suffix: tuple[str, ...] | list[str]) -> bool:
         """Check if namespace ends with suffix."""
         suffix_tuple = tuple(suffix) if isinstance(suffix, list) else suffix
         return namespace[-len(suffix_tuple) :] == suffix_tuple

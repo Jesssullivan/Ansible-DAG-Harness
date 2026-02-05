@@ -158,7 +158,7 @@ class NotificationService:
         if notification.data:
             fields = []
             for key, value in notification.data.items():
-                if isinstance(value, (list, dict)):
+                if isinstance(value, list | dict):
                     value = json.dumps(value, indent=2)[:1024]
                 fields.append(
                     {

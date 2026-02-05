@@ -15,13 +15,11 @@ harness project in a git repository:
 import json
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
 from harness.config import HarnessConfig
 from harness.db.state import StateDB
-
 
 # Lines to add to .gitignore for .harness/ artifacts
 GITIGNORE_ENTRIES = [
@@ -34,7 +32,7 @@ GITIGNORE_ENTRIES = [
 ]
 
 
-def _detect_git_root(repo_root: Optional[Path] = None) -> Path:
+def _detect_git_root(repo_root: Path | None = None) -> Path:
     """Detect the git repository root directory.
 
     Args:
@@ -98,7 +96,7 @@ def _generate_config(
     repo_root: Path,
     harness_dir: Path,
     force: bool = False,
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
 ) -> Path:
     """Generate harness.yml from detected values.
 
@@ -237,7 +235,7 @@ def _deploy_claude_assets(repo_root: Path, force: bool = False) -> dict:
     Returns:
         Dict with deployment results.
     """
-    from harness.install import MCPInstaller, InstallStatus
+    from harness.install import MCPInstaller
 
     installer = MCPInstaller(project_root=repo_root)
     result = installer.install(force=force)
@@ -300,10 +298,10 @@ def _patch_npm_scripts(repo_root: Path, force: bool = False) -> bool:
 
 
 def init_harness(
-    repo_root: Optional[Path] = None,
+    repo_root: Path | None = None,
     force: bool = False,
     no_detect_roles: bool = False,
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
     skip_claude: bool = False,
 ) -> dict:
     """Initialize harness in a repository.
